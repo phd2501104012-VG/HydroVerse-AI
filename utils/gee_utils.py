@@ -190,32 +190,60 @@ def cmip6_chunked_fetch(fc, model, scenario, bands, start, end, scale=25000):
         )
         if coll.size().getInfo() == 0:
             return pd.DataFrame(columns=["district", "date"] + bands)
-
-        reducer = build_reducer(bands)
-
-        def per_image(img):
-            d = img.date().format("YYYY-MM-dd")
-            stats = img.reduceRegions(
-                collection=fc, reducer=reducer, scale=scale,
-            )
-            return stats.map(lambda f: f.set({"date": d}).setGeometry(None))
-
-        flat = coll.map(per_image).flatten()
-        info = flat.getInfo()
-        feats = info.get("features", [])
-
-        rows = []
-        for f in feats:
-            props = f.get("properties", {})
-            row = {"district": props.get("district"), "date": props.get("date")}
-            for b in bands:
-                row[b] = props.get(b)
-            rows.append(row)
-
-        df = pd.DataFrame(rows)
-        if not df.empty:
-            df["date"] = pd.to_datetime(df["date"])
-            for b in bands:
-                df[b] = pd.to_numeric(df[b], errors="coerce")
-        return df
+        return _cmip6_coll_to_df(coll, fc, bands, scale)
     return _fetch()
+
+
+def cmip6_multi_model_fetch(fc, models, scenario, bands, start, end, scale=25000):
+    """Fetch CMIP6 data for MULTIPLE models in a single GEE query (~8x faster)."""
+    if not _HAS_EE:
+        return pd.DataFrame(columns=["district", "date", "model"] + bands)
+    @retry(max_attempts=3, backoff=3.0)
+    def _fetch():
+        coll = (
+            ee.ImageCollection("NASA/GDDP-CMIP6")
+            .filter(ee.Filter.inList("model", models))
+            .filter(ee.Filter.eq("scenario", scenario))
+            .filterDate(start, end)
+            .select(bands)
+        )
+        if coll.size().getInfo() == 0:
+            return pd.DataFrame(columns=["district", "date", "model"] + bands)
+        return _cmip6_coll_to_df(coll, fc, bands, scale, add_model=True)
+    return _fetch()
+
+
+def _cmip6_coll_to_df(coll, fc, bands, scale=25000, add_model=False):
+    """Execute a CMIP6 ImageCollection query and return a DataFrame."""
+    reducer = build_reducer(bands)
+
+    def per_image(img):
+        d = img.date().format("YYYY-MM-dd")
+        props = {"date": d}
+        if add_model:
+            props["model"] = img.get("model")
+        stats = img.reduceRegions(
+            collection=fc, reducer=reducer, scale=scale,
+        )
+        return stats.map(lambda f: f.set(props).setGeometry(None))
+
+    flat = coll.map(per_image).flatten()
+    info = flat.getInfo()
+    feats = info.get("features", [])
+
+    rows = []
+    for f in feats:
+        props = f.get("properties", {})
+        row = {"district": props.get("district"), "date": props.get("date")}
+        if add_model:
+            row["model"] = props.get("model")
+        for b in bands:
+            row[b] = props.get(b)
+        rows.append(row)
+
+    df = pd.DataFrame(rows)
+    if not df.empty:
+        df["date"] = pd.to_datetime(df["date"])
+        for b in bands:
+            df[b] = pd.to_numeric(df[b], errors="coerce")
+    return df

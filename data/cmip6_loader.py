@@ -32,41 +32,43 @@ class CMIP6Loader:
         scenario: str,
         year: int,
         variables: Optional[List[str]] = None,
-        month_by_month: bool = False,
+        chunk_days: Optional[int] = None,
     ) -> pd.DataFrame:
         if self.ee_fc is None:
             raise RuntimeError("EE FeatureCollection not set")
 
         variables = variables or list(self.variables.keys())
-        # Use variable key as band name (standard CMIP6 short names in GEE), or explicit "band" key
         bands = []
         for v in variables:
             if v in self.variables:
                 bands.append(self.variables[v].get("band", v))
             else:
                 bands.append(v)
-        all_chunks = []
 
-        if month_by_month:
-            for month in range(1, 13):
-                start = f"{year}-{month:02d}-01"
-                end = f"{year+1}-01-01" if month == 12 else f"{year}-{month+1:02d}-01"
-                try:
-                    df = cmip6_chunked_fetch(self.ee_fc, model, scenario, bands, start, end)
-                    if not df.empty:
-                        all_chunks.append(df)
-                    time.sleep(0.5)
-                except Exception as e:
-                    log.warning(f"CMIP6 fetch failed: {model} {year}-{month}: {e}")
-        else:
-            start = f"{year}-01-01"
-            end = f"{year+1}-01-01"
+        # Dynamically compute chunk size to stay under GEE's 5000 flatten limit
+        if chunk_days is None:
+            try:
+                n_districts = self.ee_fc.size().getInfo()
+            except Exception:
+                n_districts = 51
+            max_chunk = 4500 // max(n_districts, 1)  # safe buffer
+            chunk_days = min(max(max_chunk, 10), 180)
+
+        all_chunks = []
+        cur = pd.Timestamp(f"{year}-01-01")
+        end_dt = pd.Timestamp(f"{year+1}-01-01")
+        while cur < end_dt:
+            nxt = min(cur + pd.Timedelta(days=chunk_days), end_dt)
+            start = cur.strftime("%Y-%m-%d")
+            end = nxt.strftime("%Y-%m-%d")
             try:
                 df = cmip6_chunked_fetch(self.ee_fc, model, scenario, bands, start, end)
                 if not df.empty:
                     all_chunks.append(df)
+                time.sleep(0.3)
             except Exception as e:
-                log.warning(f"CMIP6 fetch failed: {model} {year}: {e}")
+                log.warning(f"CMIP6 fetch failed: {model} {start}..{end}: {e}")
+            cur = nxt
 
         if not all_chunks:
             return pd.DataFrame()
@@ -127,7 +129,7 @@ class CMIP6Loader:
             return pd.DataFrame()
 
         vars_to_agg = [v["alias"] for v in self.variables.values()]
-        vars_to_agg = [v for v in vars_to_agg if v in df.columns]
+        vars_to_agg = [v for v in vars_to_agg if v in df.columns and df[v].notna().any()]
 
         if "scenario" not in df.columns:
             df["scenario"] = CFG.forecasting.ssp_scenario

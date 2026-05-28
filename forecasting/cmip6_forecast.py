@@ -37,7 +37,13 @@ class CMIP6ForecastGenerator:
         p10_col = f"{cmip6_var}_p10"
         p90_col = f"{cmip6_var}_p90"
 
-        if mean_col not in self._ensemble.columns:
+        # Use P90 (upper bound) for precip to capture more realistic flood events,
+        # mean for temperature variables (ensemble mean is reliable for temperature)
+        forecast_col = p90_col if target == "precip" else mean_col
+        lower_col = p10_col
+        upper_col = p90_col
+
+        if forecast_col not in self._ensemble.columns:
             return pd.DataFrame()
 
         sub = self._ensemble[
@@ -51,16 +57,16 @@ class CMIP6ForecastGenerator:
 
         result = pd.DataFrame({
             "date": pd.to_datetime(sub["date"].values),
-            "forecast": sub[mean_col].values,
+            "forecast": sub[forecast_col].values,
         })
 
-        if p10_col in sub.columns:
-            result["lower"] = sub[p10_col].values
-            result["upper"] = sub[p90_col].values
+        if lower_col in sub.columns:
+            result["lower"] = sub[lower_col].values
+            result["upper"] = sub[upper_col].values
         else:
-            std = sub[mean_col].std() if len(sub) > 1 else sub[mean_col].mean() * 0.1
-            result["lower"] = sub[mean_col].values - 1.64 * std
-            result["upper"] = sub[mean_col].values + 1.64 * std
+            std = sub[forecast_col].std() if len(sub) > 1 else sub[forecast_col].mean() * 0.1
+            result["lower"] = sub[forecast_col].values - 1.64 * std
+            result["upper"] = sub[forecast_col].values + 1.64 * std
 
         return result
 
