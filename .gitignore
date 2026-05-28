@@ -1,0 +1,74 @@
+# === Python ===
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+*.egg
+
+# === Notebooks ===
+.ipynb_checkpoints/
+
+# === Environment ===
+.env
+.venv/
+venv/
+env/
+
+# === IDE ===
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# === Data ===
+data/raw/
+data/processed/
+data/cache/
+
+# === GEE Credentials ===
+*.private-key.json
+.earthengine/
+credentials/
+
+# === Outputs ===
+outputs/
+exports/
+reports/*.pdf
+reports/*.html
+*.png
+*.svg
+*.csv
+*.parquet
+*.xlsx
+
+# === Logs ===
+logs/
+*.log
+
+# === OS ===
+.DS_Store
+Thumbs.db
+
+# === Large files ===
+*.nc
+*.tif
+*.hdf
+*.h5
+*.pkl
+*.joblib
+
+# === Secrets ===
+**/secrets/
+**/keys/
+*.key
+*.pem
+
+# === Streamlit ===
+.streamlit/
+
+# === Temporary ===
+tmp/
+temp/
+*.tmp
