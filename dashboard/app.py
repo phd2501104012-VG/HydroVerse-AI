@@ -556,39 +556,59 @@ today = now.date()
 # ── MAIN CONTENT DISPATCH ──
 if current_nav == "Live Monitoring":
     st.markdown(f'<div class="card"><h3 class="card-title">Live Monitoring — 7-Day Forecast for {district}</h3>')
-    try:
-        fc_tmax = forecast_engine.ml.generate_forecast(data, "tmax", district, horizon_days=7) if has_data else pd.DataFrame()
-        fc_precip = forecast_engine.ml.generate_forecast(data, "precip", district, horizon_days=7) if has_data else pd.DataFrame()
-    except Exception:
-        fc_tmax = fc_precip = pd.DataFrame()
-    if not fc_tmax.empty or not fc_precip.empty:
-        c1, c2 = st.columns(2)
-        with c1:
-            fig = go.Figure()
-            if not fc_tmax.empty:
-                fc_tmax["date"] = pd.to_datetime(fc_tmax["date"])
-                fig.add_trace(go.Scatter(x=fc_tmax["date"], y=fc_tmax["forecast"],
-                    mode="lines+markers", name="Max Temp", line=dict(color="#f97316", width=2)))
-            fig.update_layout(title="Temperature Forecast (°C)", height=300,
-                margin=dict(t=30,b=10,l=10,r=10), paper_bgcolor="rgba(0,0,0,0)",
-                plot_bgcolor="rgba(0,0,0,0)")
-            st.plotly_chart(fig, use_container_width=True, key="lm_temp")
-        with c2:
-            fig2 = go.Figure()
-            if not fc_precip.empty:
-                fc_precip["date"] = pd.to_datetime(fc_precip["date"])
-                fig2.add_trace(go.Bar(x=fc_precip["date"], y=fc_precip["forecast"],
-                    name="Rainfall", marker_color="#3b82f6"))
-            fig2.update_layout(title="Rainfall Forecast (mm)", height=300,
-                margin=dict(t=30,b=10,l=10,r=10), paper_bgcolor="rgba(0,0,0,0)",
-                plot_bgcolor="rgba(0,0,0,0)")
-            st.plotly_chart(fig2, use_container_width=True, key="lm_precip")
+    if has_data:
+        try:
+            fc_tmax = forecast_engine.ml.generate_forecast(data, "tmax", district, horizon_days=7) if has_data else pd.DataFrame()
+            fc_precip = forecast_engine.ml.generate_forecast(data, "precip", district, horizon_days=7) if has_data else pd.DataFrame()
+        except Exception:
+            fc_tmax = fc_precip = pd.DataFrame()
+        if not fc_tmax.empty or not fc_precip.empty:
+            c1, c2 = st.columns(2)
+            with c1:
+                fig = go.Figure()
+                if not fc_tmax.empty:
+                    fc_tmax["date"] = pd.to_datetime(fc_tmax["date"])
+                    fig.add_trace(go.Scatter(x=fc_tmax["date"], y=fc_tmax["forecast"],
+                        mode="lines+markers", name="Max Temp", line=dict(color="#f97316", width=2)))
+                fig.update_layout(title="Temperature Forecast (°C)", height=300,
+                    margin=dict(t=30,b=10,l=10,r=10), paper_bgcolor="rgba(0,0,0,0)",
+                    plot_bgcolor="rgba(0,0,0,0)")
+                st.plotly_chart(fig, use_container_width=True, key="lm_temp")
+            with c2:
+                fig2 = go.Figure()
+                if not fc_precip.empty:
+                    fc_precip["date"] = pd.to_datetime(fc_precip["date"])
+                    fig2.add_trace(go.Bar(x=fc_precip["date"], y=fc_precip["forecast"],
+                        name="Rainfall", marker_color="#3b82f6"))
+                fig2.update_layout(title="Rainfall Forecast (mm)", height=300,
+                    margin=dict(t=30,b=10,l=10,r=10), paper_bgcolor="rgba(0,0,0,0)",
+                    plot_bgcolor="rgba(0,0,0,0)")
+                st.plotly_chart(fig2, use_container_width=True, key="lm_precip")
+        else:
+            # Show recent observations when forecast not available
+            recent = data[["tmax","precip"]].dropna().tail(30)
+            if not recent.empty:
+                c1, c2 = st.columns(2)
+                with c1:
+                    fig = go.Figure()
+                    fig.add_trace(go.Scatter(x=recent.index, y=recent["tmax"],
+                        mode="lines+markers", name="Max Temp", line=dict(color="#f97316", width=2)))
+                    fig.update_layout(title="Recent Temperature (°C)", height=300,
+                        margin=dict(t=30,b=10,l=10,r=10), paper_bgcolor="rgba(0,0,0,0)",
+                        plot_bgcolor="rgba(0,0,0,0)")
+                    st.plotly_chart(fig, use_container_width=True, key="lm_recent_tmax")
+                with c2:
+                    fig2 = go.Figure()
+                    fig2.add_trace(go.Bar(x=recent.index, y=recent["precip"],
+                        name="Rainfall", marker_color="#3b82f6"))
+                    fig2.update_layout(title="Recent Rainfall (mm)", height=300,
+                        margin=dict(t=30,b=10,l=10,r=10), paper_bgcolor="rgba(0,0,0,0)",
+                        plot_bgcolor="rgba(0,0,0,0)")
+                    st.plotly_chart(fig2, use_container_width=True, key="lm_recent_precip")
+            else:
+                st.info("No recent observations available.")
     else:
-        st.markdown(f"""
-        <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:8px;margin-top:12px;">
-        {''.join(f'<div style="background:var(--panel);border-radius:10px;padding:10px;text-align:center;border:1px solid var(--line);"><div style="font-size:11px;color:#64748b;font-weight:500;">{(today+timedelta(days=i)).strftime("%a")}</div><div style="font-size:13px;font-weight:600;margin:4px 0;">{today+timedelta(days=i)}</div><div style="font-size:24px;font-weight:700;color:#f97316;">{39-i//2}°</div><div style="font-size:11px;color:#3b82f6;">{max(0,8-i*2)}mm</div></div>' for i in range(7))}
-        </div>
-        """, unsafe_allow_html=True)
+        st.info("No data available for this district.")
     st.markdown('</div>', unsafe_allow_html=True)
 
 elif current_nav == "Forecasting":
@@ -718,6 +738,21 @@ elif current_nav == "Climate Trends":
         }
         available = [(k, v) for k, v in _trend_vars.items() if k in data.columns]
         if available:
+            # Combined overlay plot
+            fig_all = go.Figure()
+            for var, (title, agg, color, plot_type) in available:
+                s = data[var].dropna()
+                if not s.empty:
+                    monthly = s.resample("ME").agg(agg)
+                    normalized = (monthly - monthly.min()) / (monthly.max() - monthly.min() + 1e-9)
+                    fig_all.add_trace(go.Scatter(x=monthly.index, y=normalized,
+                        mode="lines", name=var.upper(), line=dict(color=color, width=1.5)))
+            if fig_all.data:
+                fig_all.update_layout(title="All Variables (Normalized 0–1)", height=250,
+                    margin=dict(t=30,b=10,l=10,r=10), paper_bgcolor="rgba(0,0,0,0)",
+                    plot_bgcolor="rgba(0,0,0,0)", legend=dict(orientation="h", y=1.1))
+                st.plotly_chart(fig_all, use_container_width=True, key="ct_all")
+            # Individual plots
             cols = st.columns(2)
             for idx, (var, (title, agg, color, plot_type)) in enumerate(available):
                 with cols[idx % 2]:
@@ -782,14 +817,36 @@ elif current_nav == "Reports":
     st.rerun()
 
 elif current_nav == "Alerts":
-    st.markdown('<div class="card"><h3 class="card-title">Active Alerts &amp; Warnings</h3></div>')
-    if not alerts.empty:
-        st.dataframe(alerts, use_container_width=True)
+    st.markdown(f'<div class="card"><h3 class="card-title">Active Alerts &amp; Warnings — {district}</h3>')
+    # Generate alerts from current hazard severity values
+    _alert_list = []
+    if not hazards.empty:
+        for hname, hcol, hlabel, hicon, hbg in [
+            ("flood", "flood_severity", "Flood Risk", "💧", "#dbeafe"),
+            ("drought", "drought_severity", "Drought", "🏜️", "#fef3c7"),
+            ("heatwave", "heatwave_severity", "Heatwave", "🔥", "#fee2e2"),
+            ("agri_stress", "agri_severity", "Agri Stress", "🌾", "#dcfce7"),
+        ]:
+            if hcol in hazards.columns:
+                v = float(hazards[hcol].dropna().iloc[-1]) if hazards[hcol].notna().any() else 0
+                if v >= 50:
+                    level = "Warning" if v >= 75 else "Watch"
+                    _alert_list.append((hicon, hbg, f"{hlabel} Alert ({level})",
+                        f"{district} | Severity: {v:.0f}/100 | {_risk_word(v)}"))
+    if _alert_list:
+        for icon, bg, title, desc in _alert_list:
+            st.markdown(f"""
+            <div class="alert-row"><div class="alert-icon" style="background:{bg};">{icon}</div>
+            <div><div style="font-size:13px;font-weight:600;">{title}</div>
+            <div style="font-size:11px;color:#64748b;">{desc}</div></div></div>
+            """, unsafe_allow_html=True)
     else:
         st.markdown("""
-        <div class="alert-row"><div class="alert-icon" style="background:#fee2e2;">⚠️</div><div><div style="font-size:13px;font-weight:600;">Heatwave Alert</div><div style="font-size:11px;color:#64748b;">Western MP | 29 May – 2 Jun</div></div></div>
-        <div class="alert-row"><div class="alert-icon" style="background:#fef3c7;">⛈️</div><div><div style="font-size:13px;font-weight:600;">Thunderstorm Warning</div><div style="font-size:11px;color:#64748b;">Bhopal, Raisen, Sehore | 29 May</div></div></div>
-        <div class="alert-row"><div class="alert-icon" style="background:#dbeafe;">💧</div><div><div style="font-size:13px;font-weight:600;">Rainfall Deficit</div><div style="font-size:11px;color:#64748b;">Several districts | Next 7 days</div></div></div>
+        <div style="display:flex;align-items:center;gap:12px;padding:16px 0;">
+          <div style="width:36px;height:36px;border-radius:50%;background:#dcfce7;display:flex;align-items:center;justify-content:center;font-size:18px;">✅</div>
+          <div><div style="font-size:14px;font-weight:600;color:#16a34a;">No Active Alerts</div>
+          <div style="font-size:12px;color:#64748b;">All hazard levels are within normal range for {district}.</div></div>
+        </div>
         """, unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
