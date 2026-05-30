@@ -743,10 +743,19 @@ elif current_nav == "Climate Trends":
 elif current_nav == "AI Assistant":
     st.markdown('<div class="card"><h3 class="card-title">AI Climate Assistant</h3>', unsafe_allow_html=True)
     gemini_key = os.environ.get("GEMINI_API_KEY", "gen-lang-client-0639385723")
+    _model = None
+    _model_err = None
     try:
         import google.generativeai as genai
         genai.configure(api_key=gemini_key)
-        model = genai.GenerativeModel("gemini-2.0-flash")
+        _model = genai.GenerativeModel("gemini-2.0-flash")
+    except ImportError:
+        _model_err = "Install google-generativeai to enable the AI Assistant."
+    except Exception as e:
+        _model_err = f"AI Assistant unavailable: {e}"
+    if _model_err:
+        st.warning(_model_err)
+    else:
         if "chat_history" not in st.session_state:
             st.session_state.chat_history = []
         for role, text in st.session_state.chat_history[-10:]:
@@ -758,7 +767,7 @@ elif current_nav == "AI Assistant":
                 st.markdown(prompt)
             with st.chat_message("assistant"):
                 try:
-                    resp = model.generate_content(
+                    resp = _model.generate_content(
                         f"You are HydroVerse AI, a climate intelligence assistant for Madhya Pradesh, India. "
                         f"Current district: {district}. Answer: {prompt}"
                     )
@@ -766,10 +775,6 @@ elif current_nav == "AI Assistant":
                     st.session_state.chat_history.append(("assistant", resp.text))
                 except Exception as e:
                     st.error(f"Gemini API error: {e}")
-    except ImportError:
-        st.info("Install google-generativeai to enable the AI Assistant.")
-    except Exception as e:
-        st.warning(f"AI Assistant unavailable: {e}")
     st.markdown('</div>', unsafe_allow_html=True)
 
 elif current_nav == "Reports":
@@ -1203,31 +1208,37 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 gemini_key = os.environ.get("GEMINI_API_KEY", "gen-lang-client-0639385723")
+_gmodel = None
 try:
     import google.generativeai as genai
     genai.configure(api_key=gemini_key)
     _gmodel = genai.GenerativeModel("gemini-2.0-flash")
-    _show_popup = st.session_state.get("_show_ai_popup", False)
-    if st.button("🤖 AI Assistant", key="ai_float_toggle", help="Toggle AI Assistant"):
-        st.session_state._show_ai_popup = not st.session_state._show_ai_popup
-        st.rerun()
-    if st.session_state.get("_show_ai_popup"):
-        st.markdown('<div class="ai-popup" id="ai-popup">', unsafe_allow_html=True)
-        st.markdown(f'<div class="ai-popup-header"><span>🤖 HydroVerse AI</span><span style="cursor:pointer;font-size:18px;" onclick="document.getElementById(\'ai-popup\').style.display=\'none\'">×</span></div>', unsafe_allow_html=True)
-        st.markdown('<div class="ai-popup-body">', unsafe_allow_html=True)
-        if "chat_history" not in st.session_state:
-            st.session_state.chat_history = []
-        for role, text in st.session_state.chat_history[-6:]:
-            with st.chat_message(role):
-                st.markdown(text)
-        st.markdown('</div>', unsafe_allow_html=True)
-        st.markdown('<div class="ai-popup-footer">', unsafe_allow_html=True)
-        if prompt := st.chat_input("Ask about climate, hazards..."):
-            st.session_state.chat_history.append(("user", prompt))
-            st.session_state._show_ai_popup = True
-            with st.chat_message("user"):
-                st.markdown(prompt)
-            with st.chat_message("assistant"):
+except Exception:
+    pass
+_show_popup = st.session_state.get("_show_ai_popup", False)
+if st.button("🤖 AI Assistant", key="ai_float_toggle", help="Toggle AI Assistant"):
+    st.session_state._show_ai_popup = not st.session_state._show_ai_popup
+    st.rerun()
+if st.session_state.get("_show_ai_popup"):
+    st.markdown('<div class="ai-popup" id="ai-popup">', unsafe_allow_html=True)
+    st.markdown(f'<div class="ai-popup-header"><span>🤖 HydroVerse AI</span><span style="cursor:pointer;font-size:18px;" onclick="document.getElementById(\'ai-popup\').style.display=\'none\'">×</span></div>', unsafe_allow_html=True)
+    st.markdown('<div class="ai-popup-body">', unsafe_allow_html=True)
+    if "chat_history" not in st.session_state:
+        st.session_state.chat_history = []
+    for role, text in st.session_state.chat_history[-6:]:
+        with st.chat_message(role):
+            st.markdown(text)
+    st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown('<div class="ai-popup-footer">', unsafe_allow_html=True)
+    if prompt := st.chat_input("Ask about climate, hazards..."):
+        st.session_state.chat_history.append(("user", prompt))
+        st.session_state._show_ai_popup = True
+        with st.chat_message("user"):
+            st.markdown(prompt)
+        with st.chat_message("assistant"):
+            if _gmodel is None:
+                st.error("AI unavailable — set a valid GEMINI_API_KEY in Secrets.")
+            else:
                 try:
                     resp = _gmodel.generate_content(
                         f"You are HydroVerse AI, a climate assistant for MP, India. "
@@ -1237,9 +1248,5 @@ try:
                     st.session_state.chat_history.append(("assistant", resp.text))
                 except Exception as e:
                     st.error(f"Gemini error: {e}")
-        st.markdown('</div>', unsafe_allow_html=True)
-        st.markdown('</div>', unsafe_allow_html=True)
-except ImportError:
-    pass
-except Exception as e:
-    logger.warning(f"AI Assistant: {e}")
+    st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
