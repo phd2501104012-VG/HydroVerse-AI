@@ -748,7 +748,7 @@ elif current_nav == "AI Assistant":
     try:
         import google.generativeai as genai
         genai.configure(api_key=gemini_key)
-        _model = genai.GenerativeModel("gemini-1.5-flash")
+        _model = genai.GenerativeModel("gemini-pro")
     except ImportError:
         _model_err = "Install google-generativeai to enable the AI Assistant."
     except Exception as e:
@@ -1212,7 +1212,7 @@ _gmodel = None
 try:
     import google.generativeai as genai
     genai.configure(api_key=gemini_key)
-    _gmodel = genai.GenerativeModel("gemini-1.5-flash")
+    _gmodel = genai.GenerativeModel("gemini-pro")
 except Exception:
     pass
 if "_show_ai_popup" not in st.session_state:
