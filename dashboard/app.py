@@ -373,16 +373,16 @@ alerts = st.session_state.get("alerts", pd.DataFrame())
 core_cols = [c for c in ["tmax","tmin","precip","ndvi","soil_moisture"] if c in data.columns]
 has_data = len(core_cols) > 0 and not data[core_cols].isnull().all().all()
 
-# Latest hazard values
-spi_val = float(hazards["spi_3m"].dropna().iloc[-1]) if not hazards.empty and "spi_3m" in hazards.columns else None
-cdd_val = float(hazards["cdd"].dropna().iloc[-1]) if not hazards.empty and "cdd" in hazards.columns else None
-tanom_val = float(hazards["tmax_anom"].dropna().iloc[-1]) if not hazards.empty and "tmax_anom" in hazards.columns else None
-panom_val = float(hazards["precip_anom"].dropna().iloc[-1]) if not hazards.empty and "precip_anom" in hazards.columns else None
-
 def _safe_last(col, default=0):
     if not hazards.empty and col in hazards.columns and hazards[col].notna().any():
         return float(hazards[col].dropna().iloc[-1])
     return default
+
+# Latest hazard values
+spi_val = _safe_last("spi_3m", default=None) if not hazards.empty and "spi_3m" in hazards.columns else None
+cdd_val = _safe_last("cdd", default=None) if not hazards.empty and "cdd" in hazards.columns else None
+tanom_val = _safe_last("tmax_anom", default=None) if not hazards.empty and "tmax_anom" in hazards.columns else None
+panom_val = _safe_last("precip_anom", default=None) if not hazards.empty and "precip_anom" in hazards.columns else None
 
 fv = _safe_last("flood_severity")
 dv = _safe_last("drought_severity")
