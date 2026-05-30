@@ -46,7 +46,7 @@ def _try_gemini(query: str, context: dict) -> str | None:
         return None
     try:
         genai.configure(api_key=key)
-        model = genai.GenerativeModel("gemini-2.0-flash")
+        model = genai.GenerativeModel("gemini-1.5-flash")
         prompt = _SYSTEM_PROMPT.format(**context) + f"\n\nUser question: {query}"
         resp = model.generate_content(prompt)
         return resp.text.strip() if resp and resp.text else None
