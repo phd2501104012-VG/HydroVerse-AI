@@ -28,6 +28,8 @@ class DistrictBoundaries:
         if self._gdf is not None and not force_reload:
             return self._gdf
 
+        self._state_boundary: Optional[gpd.GeoDataFrame] = None
+
         for p in CFG.shp_candidates:
             if Path(p).exists():
                 try:
@@ -36,10 +38,54 @@ class DistrictBoundaries:
                         self._gdf = self._filter_state(gdf)
                         log.info(f"Loaded {len(self._gdf)} districts from {p}")
                         return self._gdf
+                    elif CFG.state_col in gdf.columns and CFG.district_col not in gdf.columns:
+                        # State-level shapefile only — store as boundary backdrop
+                        state_gdf = gdf[gdf[CFG.state_col].astype(str).str.contains(CFG.state_name, case=False, na=False)].copy()
+                        if state_gdf.crs is not None and state_gdf.crs.to_string() != "EPSG:4326":
+                            state_gdf = state_gdf.to_crs("EPSG:4326")
+                        self._state_boundary = state_gdf
+                        log.info(f"Stored state boundary from {p} ({len(state_gdf)} row(s))")
                 except Exception as e:
                     log.warning(f"Failed to load {p}: {e}")
 
-        raise FileNotFoundError("No shapefile found")
+        log.info("No district shapefile found — generating synthetic district hex grid")
+        self._gdf = self._generate_hex_gdf()
+        return self._gdf
+
+    @staticmethod
+    def _generate_hex_gdf():
+        """Generate a synthetic GeoDataFrame with hexagon districts for MP."""
+        from shapely.geometry import Polygon
+        import math
+
+        districts = CFG.all_mp_districts
+        n = len(districts)
+        # Approximate MP bounding box (lat/lon)
+        min_lat, max_lat = 21.5, 26.5
+        min_lon, max_lon = 74.0, 82.5
+        cols = 8
+        rows = math.ceil(n / cols)
+        hex_r = 0.35
+        w = hex_r * math.sqrt(3)
+        h = hex_r * 2
+        step_y = hex_r * 1.5
+
+        features = []
+        for i, name in enumerate(districts):
+            col = i % cols
+            row = i // cols
+            cx = min_lon + col * w + (0 if row % 2 == 0 else w / 2)
+            cy = max_lat - row * step_y
+            pts = []
+            for a in range(6):
+                ang = math.radians(60 * a - 30)
+                pts.append((cx + hex_r * math.cos(ang), cy + hex_r * math.sin(ang)))
+            poly = Polygon(pts)
+            features.append({"NAME_2": name, "NAME_1": "Madhya Pradesh", "geometry": poly})
+
+        gdf = gpd.GeoDataFrame(features, crs="EPSG:4326")
+        log.info(f"Generated synthetic hex grid with {len(gdf)} districts")
+        return gdf
 
     def _filter_state(self, gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
         mask = gdf[CFG.state_col].astype(str).str.contains(CFG.state_name, case=False, na=False)
@@ -118,3 +164,9 @@ class DistrictBoundaries:
     @property
     def gdf(self) -> gpd.GeoDataFrame:
         return self.load()
+
+    @property
+    def state_boundary(self) -> Optional[gpd.GeoDataFrame]:
+        """Return the state-level boundary (backdrop) if loaded from shapefile."""
+        self.load()
+        return self._state_boundary

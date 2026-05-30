@@ -1,6 +1,6 @@
 APP_NAME = "HydroVerse AI"
 APP_TITLE = "HydroVerse AI — Climate Hazard Intelligence Platform"
-APP_SUBTITLE = "AI-Powered Real-Time Climate Hazard Intelligence Platform"
+APP_SUBTITLE = "Real-Time Climate Hazard Intelligence Platform"
 APP_ICON = "🌍"
 THEME_PRIMARY = "#0EA5E9"
 THEME_SECONDARY = "#14B8A6"

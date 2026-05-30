@@ -137,6 +137,7 @@ class DashboardConfig:
     map_zoom: int = 7
     map_center_lat: float = 23.5
     map_center_lon: float = 78.5
+    port: int = 8501
     animation_fps: int = 10
     refresh_interval_ms: int = 60000
 
@@ -150,7 +151,10 @@ class Config:
 
     # Shapefiles
     shp_candidates: List[str] = field(default_factory=lambda: [
-        r"D:\India_Tehsil_District_Boundary\India_Tehsil_District_Boundary\India_District_Boundary.shp",
+        "./MP_SHAPE/MP_DISTRICT.shp",
+        r"D:\cri (2)\cri\MP_SHAPE\MP_DISTRICT.shp",
+        "./MP_SHAPE/MP_state.shp",
+        r"D:\cri (2)\cri\MP_SHAPE\MP_state.shp",
         "./India_District_Boundary.shp",
         "./data/India_District_Boundary.shp",
         "./cache_climate/mp_districts.geojson",

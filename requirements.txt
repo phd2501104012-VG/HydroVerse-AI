@@ -38,6 +38,9 @@ plotly>=5.17.0
 streamlit-folium>=0.15.0
 streamlit-option-menu>=0.3.6
 
+# --- AI Assistant ---
+google-generativeai>=0.3.0
+
 # --- API (optional) ---
 # fastapi>=0.104.0     # Uncomment for REST API
 # uvicorn>=0.24.0      # Uncomment for REST API

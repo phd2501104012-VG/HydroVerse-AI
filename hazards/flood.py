@@ -72,9 +72,13 @@ class FloodDetector:
         severe_mask = (heavy_run >= 2) & (saturation_mult > 0.8) & (p >= IMD_HEAVY)
         flood_risk = pd.Series(np.where(severe_mask, "Severe", flood_risk), index=df.index)
 
-        # Zero out pre-monsoon (Oct-May) unless actual extreme rain occurs
-        is_premonsoon = df.index.month.isin([10, 11, 12, 1, 2, 3, 4, 5])
-        severity = np.where(is_premonsoon & (p < IMD_HEAVY * 0.5), 0, severity)
+        # Zero out pre-monsoon months — MP has negligible flood risk
+        # Apr-May: completely zeroed (dry pre-monsoon, no floods)
+        # Oct-Mar: zeroed unless actual heavy rain (>= IMD_HEAVY)
+        is_april_may = df.index.month.isin([4, 5])
+        severity = np.where(is_april_may, 0, severity)
+        is_rest_dry = df.index.month.isin([10, 11, 12, 1, 2, 3])
+        severity = np.where(is_rest_dry & (p < IMD_HEAVY), 0, severity)
 
         out["flood_severity"] = pd.Series(severity, index=df.index).round(1)
         out["flood_risk"] = flood_risk

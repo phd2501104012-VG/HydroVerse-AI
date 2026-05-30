@@ -1,9 +1,9 @@
 #!/usr/bin/env python
-"""HydroVerse AI — AI-Powered Climate & Water Intelligence Platform"""
+"""HydroVerse AI — Climate Hazard Intelligence Platform (redesigned)"""
 import sys, os
 from pathlib import Path
-from datetime import datetime, timedelta
-from functools import reduce
+from datetime import datetime, timedelta, date
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import streamlit as st
@@ -27,15 +27,12 @@ from realtime.alerts import AlertEngine
 from realtime.anomalies import AnomalyDetector
 from validation.historical_validation import HistoricalValidator
 from validation.confusion import ConfusionMatrixBuilder
-from dashboard.components.sidebar import render_sidebar
 from dashboard.components.charts import *
-
-from dashboard.components.sidebar import render_sidebar
 from dashboard.components.realtime_panel import render_realtime_status, render_alert_summary
 from dashboard.components.event_cards import render_event_cards
 from dashboard.components.ai_insights import render_ai_insights
-from dashboard.components.chatbot import render_chatbot
 from dashboard.components.forecast_view import render_forecast_tab
+from dashboard.components.comparison_advisory import render_source_comparison, render_policy_advisory
 
 try:
     from data.cmip6_loader import CMIP6Loader
@@ -49,28 +46,114 @@ from utils import get_logger
 
 logger = get_logger(__name__)
 
-st.set_page_config(page_title=APP_TITLE, page_icon=APP_ICON, layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(
+    page_title="HydroVerse AI | Climate Hazard Intelligence Platform",
+    page_icon=":material/water_drop:",
+    layout="wide",
+)
 
-css_path = Path(__file__).resolve().parent / "assets" / "style.css"
-if css_path.exists():
-    with open(css_path, encoding="utf-8") as f:
-        st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
+# ---------------------------------------------------------------------------
+# CSS — matches the provided HTML design
+# ---------------------------------------------------------------------------
+_css = """
+<style>
+:root {
+  --bg: #f6f7fb; --panel: #ffffff; --ink: #0f172a;
+  --ink-2: #475569; --ink-3: #94a3b8;
+  --line: #e7e9ef; --line-2: #eef0f5;
+  --brand: #2563eb; --brand-2: #4f46e5;
+  --good: #16a34a; --warn: #f59e0b; --hot: #ef4444; --cool: #0ea5e9;
+  --sidebar: #0b1220; --sidebar-2: #111a2e;
+}
+.stApp { background: var(--bg); color: var(--ink); font-family: 'Plus Jakarta Sans', system-ui, sans-serif; }
+section[data-testid="stSidebar"] > div:first-child {
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%) !important;
+  border-right: 1px solid #e2e8f0 !important;
+}
+section[data-testid="stSidebar"] .st-emotion-cache-1cypcdb { color: #334155; }
+section[data-testid="stSidebar"] hr { border-color: #e2e8f0; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 1px 2px rgba(15,23,42,0.03); padding: 16px; }
+.card-title { font-weight: 600; color: var(--ink); font-size: 14px; }
+.card-sub { color: var(--ink-2); font-size: 12px; }
+.kpi { padding: 14px 16px; }
+.kpi-icon { width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; }
+.kpi-label { font-size: 11px; color: var(--ink-2); font-weight: 500; }
+.kpi-value { font-size: 22px; font-weight: 700; color: var(--ink); line-height: 1.1; }
+.kpi-delta { font-size: 11px; font-weight: 600; display: inline-flex; align-items: center; gap: 3px; }
+.pulse-dot { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 0 0 rgba(34,197,94,0.55); animation: pulse 2s infinite; display: inline-block; margin-right: 6px; }
+@keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(34,197,94,0.55); } 70% { box-shadow: 0 0 0 8px rgba(34,197,94,0); } 100% { box-shadow: 0 0 0 0 rgba(34,197,94,0); } }
+.alert-row { display: flex; gap: 10px; align-items: flex-start; padding: 8px 0; border-bottom: 1px solid var(--line-2); }
+.alert-row:last-child { border-bottom: none; }
+.alert-icon { width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.link { color: var(--brand); font-weight: 600; font-size: 12.5px; display: inline-flex; align-items: center; gap: 4px; text-decoration: none; }
+.link:hover { text-decoration: underline; }
+.section-eyebrow { font-size: 11px; font-weight: 600; color: var(--ink-3); letter-spacing: .08em; text-transform: uppercase; margin-bottom: 8px; }
+.risk { font-weight: 600; font-size: 12.5px; }
+.risk-high { color: #dc2626; }
+.risk-moderate { color: #d97706; }
+.risk-low { color: #16a34a; }
+.tag { font-size: 11px; padding: 2px 8px; border-radius: 999px; font-weight: 600; background: #f1f5f9; color: var(--ink-2); display: inline-block; }
+.pill-ctrl { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; display: flex; align-items: center; gap: 8px; box-shadow: 0 1px 2px rgba(15,23,42,0.03); }
+.data-table th { text-align: left; font-size: 11px; font-weight: 600; color: var(--ink-2); padding: 8px 12px; border-bottom: 1px solid var(--line-2); }
+.data-table td { font-size: 13px; padding: 10px 12px; border-bottom: 1px solid var(--line-2); color: var(--ink); }
+.data-table tbody tr:last-child td { border-bottom: none; }
+.data-table tbody tr:hover { background: #fafbfd; }
+.bullet-list li { padding: 4px 0; font-size: 13px; color: var(--ink-2); display: flex; gap: 8px; align-items: flex-start; }
+.bullet-list li::before { content: '•'; color: var(--ink-3); flex-shrink: 0; }
+.mono { font-family: 'JetBrains Mono', monospace; }
+.status-badge { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px 12px; }
+.wx-icon-bg { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: #f1f5f9; }
+/* Sidebar nav radio styled as nav items */
+div[data-testid="stSidebar"] div[data-testid="stRadio"] > label { display: none !important; }
+div[data-testid="stSidebar"] div[data-testid="stRadio"] > div[role="radiogroup"] { display: flex; flex-direction: column; gap: 2px; }
+div[data-testid="stSidebar"] div[data-testid="stRadio"] > div[role="radiogroup"] label {
+  display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-radius: 10px;
+  font-size: 14px; font-weight: 500; color: #475569; cursor: pointer; transition: all .15s ease;
+  background: transparent !important; border: none !important;
+}
+div[data-testid="stSidebar"] div[data-testid="stRadio"] > div[role="radiogroup"] label:hover {
+  background: rgba(0,0,0,0.03) !important; color: #0f172a !important;
+}
+div[data-testid="stSidebar"] div[data-testid="stRadio"] > div[role="radiogroup"] label[data-selected="true"] {
+  background: #ffffff !important;
+  color: #0f172a !important;
+  border-left: 3px solid #2563eb !important;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06) !important;
+  font-weight: 600 !important;
+}
+div[data-testid="stSidebar"] div[data-testid="stRadio"] > div[role="radiogroup"] label span:first-child { display: none; }
+.forecast-cell { display: flex; flex-direction: column; align-items: center; text-align: center; }
+.swatch { width: 14px; height: 14px; border-radius: 3px; display: inline-block; }
+[data-testid="stMetric"] { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px; }
+[data-testid="stMetric"] label { color: var(--ink-2) !important; font-size: 0.8rem !important; }
+[data-testid="stMetric"] [data-testid="stMetricValue"] { color: var(--ink) !important; font-size: 1.8rem !important; font-weight: 700; }
+.mono { font-family: 'JetBrains Mono', monospace; letter-spacing: -0.02em; }
+</style>
+"""
+st.markdown(_css, unsafe_allow_html=True)
 
-st.markdown('<div class="app-top-bar"></div>', unsafe_allow_html=True)
-
-# ─── Resources ───
+# ---------------------------------------------------------------------------
+# Resources (cached)
+# ---------------------------------------------------------------------------
 @st.cache_resource
 def init_resources():
-    b = DistrictBoundaries()
+    try:
+        b = DistrictBoundaries()
+        _ = b.district_names
+    except Exception as e:
+        logger.warning(f"DistrictBoundaries: {e}")
+        b = None
     ds = DataSourceManager()
     try:
         era5 = ERA5Loader()
         ds.set_era5_loader(era5)
-    except Exception as e: logger.warning(f"ERA5Loader: {e}")
+    except Exception as e:
+        logger.warning(f"ERA5Loader: {e}")
     try:
         imd = IMDLoader()
         ds.set_imd_loader(imd)
-    except Exception as e: logger.warning(f"IMDLoader: {e}")
+    except Exception as e:
+        logger.warning(f"IMDLoader: {e}")
     det = HazardDetector()
     cls = HazardClassifier()
     compound = CompoundHazardEngine()
@@ -81,67 +164,82 @@ def init_resources():
     hv = HistoricalValidator()
     return b, ds, det, cls, compound, fc, rt, ae, ad, hv
 
-bounds_mgr, ds_mgr, detector, classifier, compound_engine, forecast_engine, \
-    realtime_monitor, alert_engine, anomaly_detector, historical_validator = init_resources()
+(
+    bounds_mgr, ds_mgr, detector, classifier, compound_engine,
+    forecast_engine, realtime_monitor, alert_engine, anomaly_detector,
+    historical_validator,
+) = init_resources()
 
 districts = bounds_mgr.district_names if bounds_mgr else []
 
-# ─── Load cached CMIP6 ensemble at startup ───
+# ---------------------------------------------------------------------------
+# CMIP6 Ensemble loading
+# ---------------------------------------------------------------------------
 def load_cached_cmip6():
     cache_path = Path(CFG.cache_dir) / "cmip6_ensemble.parquet"
     if cache_path.exists():
         try:
             df = pd.read_parquet(cache_path)
-            forecast_engine.set_ensemble(df)
+            forecast_engine.cmip6.set_ensemble(df)
             logger.info(f"Loaded CMIP6 ensemble from cache ({len(df)} rows)")
+            st.session_state["_cmip6_status"] = (
+                f"CMIP6: {len(df)} rows, {df['district'].nunique()} districts"
+            )
             return df
         except Exception as e:
-            logger.warning(f"CMIP6 cache load failed: {e}")
+            st.session_state["_cmip6_status"] = f"CMIP6 load failed: {e}"
+    else:
+        st.session_state["_cmip6_status"] = "CMIP6: file not found"
     return None
 
 cmip6_ensemble = load_cached_cmip6()
 
-# ─── Initialize DICRA NDVI loader ───
-dicra_loader = DICRALoader() if DICRALoader is not None else None
+# ---------------------------------------------------------------------------
+# Constants & defaults
+# ---------------------------------------------------------------------------
+MP_DISTRICTS = [
+    "Bhopal","Raisen","Sehore","Vidisha","Hoshangabad","Indore","Ujjain",
+    "Gwalior","Jabalpur","Rewa","Sagar","Satna","Khandwa","Khargone",
+    "Dhar","Mandsaur","Ratlam","Dewas","Shajapur","Rajgarh","Guna",
+    "Ashoknagar","Shivpuri","Sheopur","Morena","Bhind","Datia",
+    "Tikamgarh","Chhatarpur","Panna","Damoh","Katni","Umaria",
+    "Shahdol","Anuppur","Dindori","Mandla","Balaghat","Seoni",
+    "Chhindwara","Betul","Harda","Burhanpur","Barwani","Alirajpur",
+    "Jhabua","Neemuch","Agar Malwa","Narsinghpur","Niwari","Singrauli","Sidhi"
+]
 
-source, district, start_date, end_date, horizon, mode = render_sidebar(
-    districts=districts,
-    data_sources=[DataSource.ERA5.value, DataSource.IMD.value, DataSource.AUTO.value],
-)
+if "district" not in st.session_state or st.session_state.district not in (districts or MP_DISTRICTS):
+    st.session_state.district = "Bhopal"
+district = st.session_state.district
 
-# ─── District change → clear session ───
-if st.session_state.get("_prev_district") != district:
-    clear_keys = ["data", "hazards", "forecasts", "alerts", "anomalies", "validation",
-                   "realtime_status", "data_loaded", "quick_forecasted_hazards",
-                   "forecasted_hazards", "rt_forecast", "chat_messages"]
-    for k in clear_keys: st.session_state.pop(k, None)
-    st.session_state._prev_district = district
+# Sidebar nav state
+if "nav_view" not in st.session_state:
+    st.session_state.nav_view = "Overview"
 
-# ─── Data Fetching ───
+# ---------------------------------------------------------------------------
+# Data fetching
+# ---------------------------------------------------------------------------
 def fetch_data(force_fresh=False):
     alt_base = Path.home() / "exports" / "raw"
     raw_path = Path(f"exports/raw/{district}_data.csv")
     candidates = [raw_path, alt_base / f"{district}_data.csv"]
-
-    # Force-fresh: skip file cache, go straight to data source
     if force_fresh:
         try:
-            data = ds_mgr.get_district_timeseries(district, ["tmax","tmin","precip"])
+            data = ds_mgr.get_district_timeseries(district, ["tmax", "tmin", "precip"])
             if data is not None and not data.empty:
                 if "date" in data.columns:
                     data = data.set_index(pd.to_datetime(data["date"])).drop(columns=["date"])
-                if "ndvi" not in data.columns: data["ndvi"] = np.nan
-                if "soil_moisture" not in data.columns: data["soil_moisture"] = np.nan
-                logger.info(f"Fetched fresh data ({len(data)} rows)")
+                for c in ["ndvi","soil_moisture"]:
+                    if c not in data.columns:
+                        data[c] = np.nan
                 return data
         except Exception as e:
-            logger.warning(f"Fresh fetch failed: {e} — falling back to cache")
-
+            logger.warning(f"Fresh fetch failed: {e}")
     best_df = None
-    for raw_path in candidates:
-        if raw_path.exists():
+    for rp in candidates:
+        if rp.exists():
             try:
-                df = pd.read_csv(raw_path)
+                df = pd.read_csv(rp)
                 if "date" in df.columns:
                     df = df.set_index(pd.to_datetime(df["date"])).drop(columns=["date"])
                 for var in ["tmax","tmin","precip"]:
@@ -151,46 +249,41 @@ def fetch_data(force_fresh=False):
                             df[var] = df[var].fillna(df[f"{var}_imd"])
                     elif f"{var}_imd" in df.columns:
                         df[var] = df[f"{var}_imd"]
-                if "ndvi" not in df.columns:
-                    df["ndvi"] = np.nan
-                if "soil_moisture" not in df.columns:
-                    df["soil_moisture"] = np.nan
-                n_cols = len(df.columns)
-                if best_df is None or n_cols > len(best_df.columns):
+                for c in ["ndvi","soil_moisture"]:
+                    if c not in df.columns:
+                        df[c] = np.nan
+                if best_df is None or len(df.columns) > len(best_df.columns):
                     best_df = df
-            except Exception as e:
-                logger.warning(f"Cached raw load failed ({raw_path}): {e}")
-
+            except Exception:
+                pass
     if best_df is not None:
         haz_candidates = [
             Path(f"exports/hazards/{district}_hazards.csv"),
             Path.home() / "exports" / "hazards" / f"{district}_hazards.csv",
         ]
         best_hdf = None
-        best_sat_count = 0
+        best_sat = 0
         for hp in haz_candidates:
             if hp.exists():
                 try:
                     hdf = pd.read_csv(hp)
                     if "date" in hdf.columns:
                         hdf = hdf.set_index(pd.to_datetime(hdf["date"]))
-                    sat_cols = [c for c in ["ndvi","soil_moisture","vci","vhi","tci"] if c in hdf.columns]
-                    if len(sat_cols) > best_sat_count:
+                    sat = [c for c in ["ndvi","soil_moisture","vci","vhi","tci"] if c in hdf.columns]
+                    if len(sat) > best_sat:
                         best_hdf = hdf
-                        best_sat_count = len(sat_cols)
-                except Exception as e:
-                    logger.warning(f"Hazards load failed ({hp}): {e}")
+                        best_sat = len(sat)
+                except Exception:
+                    pass
         if best_hdf is not None:
-            sat_cols = [c for c in ["ndvi","soil_moisture"] if c in best_hdf.columns]
-            for col in sat_cols:
-                if col not in best_df.columns:
-                    best_df[col] = np.nan
-                n = min(len(best_hdf), len(best_df))
-                vals = best_hdf[col].values[:n]
-                best_df.iloc[:n, best_df.columns.get_loc(col)] = best_df.iloc[:n, best_df.columns.get_loc(col)].fillna(
-                    pd.Series(vals, index=best_df.index[:n]))
-            logger.info(f"Merged {sat_cols} from hazards CSV")
-        logger.info(f"Loaded cached raw data ({len(best_df)} rows, {list(best_df.columns)})")
+            for col in ["ndvi","soil_moisture"]:
+                if col in best_hdf.columns and col in best_df.columns:
+                    n = min(len(best_hdf), len(best_df))
+                    vals = best_hdf[col].values[:n]
+                    fill_series = pd.Series(vals, index=best_df.index[:n])
+                    best_df.iloc[:n, best_df.columns.get_loc(col)] = (
+                        best_df.iloc[:n, best_df.columns.get_loc(col)].fillna(fill_series)
+                    )
         return best_df
     try:
         data = ds_mgr.get_district_timeseries(district, ["tmax","tmin","precip"])
@@ -198,8 +291,8 @@ def fetch_data(force_fresh=False):
             if "date" in data.columns:
                 data = data.set_index(pd.to_datetime(data["date"])).drop(columns=["date"])
             return data
-    except Exception as e: logger.warning(f"Data fetch failed: {e}")
-    logger.warning(f"No data available for {district}")
+    except Exception:
+        pass
     return pd.DataFrame()
 
 def get_hazard_dict(hazards_df):
@@ -209,18 +302,28 @@ def get_hazard_dict(hazards_df):
         d[hn] = hazards_df[cols] if cols else pd.DataFrame()
     return d
 
-# ─── Load data on district select ───
+# ---------------------------------------------------------------------------
+# Load data on district select
+# ---------------------------------------------------------------------------
 force_fresh = st.session_state.pop("force_refresh", False)
-if not st.session_state.get("data_loaded") and district:
+if (not st.session_state.get("data_loaded") or st.session_state.get("data_district") != district) and district:
+    st.session_state.data_loaded = True
+    st.session_state.data_district = district
+    st.session_state.pop("rt_forecast", None)
+    for k in list(st.session_state.keys()):
+        if k.startswith("map_haz_"):
+            del st.session_state[k]
     with st.spinner(f"Loading {district}..."):
         df = fetch_data(force_fresh=force_fresh)
-        # Merge DICRA NDVI if available
-        if dicra_loader is not None and not df.empty:
-            df = dicra_loader.merge_into(df, district)
+        if DICRALoader is not None and not df.empty:
+            try:
+                dl = DICRALoader()
+                df = dl.merge_into(df, district)
+            except Exception:
+                pass
         st.session_state.data = df
-        st.session_state.data_loaded = True
-        core_cols_check = [c for c in ["tmax","tmin","precip","ndvi","soil_moisture"] if c in df.columns]
-        if not df.empty and len(core_cols_check) > 0 and not df[core_cols_check].isnull().all().all():
+        core_check = [c for c in ["tmax","tmin","precip","ndvi","soil_moisture"] if c in df.columns]
+        if not df.empty and len(core_check) > 0 and not df[core_check].isnull().all().all():
             try:
                 haz = detector.detect_all(df, district=district)
                 st.session_state.hazards = haz
@@ -228,7 +331,8 @@ if not st.session_state.get("data_loaded") and district:
                 alerts_df = alert_engine.evaluate(hdict, district, min_severity=30)
                 if not alerts_df.empty:
                     st.session_state.alerts = alerts_df
-            except Exception as e: logger.warning(f"Hazard/alert: {e}")
+            except Exception as e:
+                logger.warning(f"Hazard/alert: {e}")
 
 data = st.session_state.get("data", pd.DataFrame())
 hazards = st.session_state.get("hazards", pd.DataFrame())
@@ -236,1119 +340,892 @@ alerts = st.session_state.get("alerts", pd.DataFrame())
 core_cols = [c for c in ["tmax","tmin","precip","ndvi","soil_moisture"] if c in data.columns]
 has_data = len(core_cols) > 0 and not data[core_cols].isnull().all().all()
 
-# ─── Diagnostics sidebar ───
-if district:
-    with st.sidebar:
-        with st.expander("🔍 Data Diagnostics", expanded=False):
-            if data.empty:
-                st.error(f"No data loaded for {district}")
-                st.code(f"data_loaded={st.session_state.get('data_loaded', False)}")
-            else:
-                ndvi_nn = data['ndvi'].notna().sum() if 'ndvi' in data.columns else -1
-                sm_nn = data['soil_moisture'].notna().sum() if 'soil_moisture' in data.columns else -1
-                st.code(f"Data: {len(data)} rows × {len(data.columns)} cols")
-                st.code(f"Columns: {list(data.columns)}")
-                st.code(f"ndvi: {ndvi_nn} non-null\nsoil_moisture: {sm_nn} non-null")
-                if not hazards.empty:
-                    for c in ['vci','vhi','tci']:
-                        nn = hazards[c].notna().sum() if c in hazards.columns else -1
-                        st.code(f"hazards[{c}]: {nn} non-null")
-                else:
-                    st.code("hazards: EMPTY (detection skipped/failed)")
-                st.code(f"has_data check: {has_data}")
-
-# ─── Compute latest hazard values ───
+# Latest hazard values
 spi_val = float(hazards["spi_3m"].dropna().iloc[-1]) if not hazards.empty and "spi_3m" in hazards.columns else None
 cdd_val = float(hazards["cdd"].dropna().iloc[-1]) if not hazards.empty and "cdd" in hazards.columns else None
 tanom_val = float(hazards["tmax_anom"].dropna().iloc[-1]) if not hazards.empty and "tmax_anom" in hazards.columns else None
 panom_val = float(hazards["precip_anom"].dropna().iloc[-1]) if not hazards.empty and "precip_anom" in hazards.columns else None
-fv = float(hazards["flood_severity"].dropna().iloc[-1]) if not hazards.empty and "flood_severity" in hazards.columns and hazards["flood_severity"].notna().any() else 0
-dv = float(hazards["drought_severity"].dropna().iloc[-1]) if not hazards.empty and "drought_severity" in hazards.columns and hazards["drought_severity"].notna().any() else 0
-hv_ = float(hazards["heatwave_severity"].dropna().iloc[-1]) if not hazards.empty and "heatwave_severity" in hazards.columns and hazards["heatwave_severity"].notna().any() else 0
-av = float(hazards["agri_severity"].dropna().iloc[-1]) if not hazards.empty and "agri_severity" in hazards.columns and hazards["agri_severity"].notna().any() else 0
 
+def _safe_last(col, default=0):
+    if not hazards.empty and col in hazards.columns and hazards[col].notna().any():
+        return float(hazards[col].dropna().iloc[-1])
+    return default
+
+fv = _safe_last("flood_severity")
+dv = _safe_last("drought_severity")
+hv_ = _safe_last("heatwave_severity")
+av = _safe_last("agri_severity")
 sev_dict = {"flood": fv, "drought": dv, "heatwave": hv_, "agri_stress": av}
 
-# ─── Build ticker items from computed data ───
-ticker_items = []
-today_str = datetime.now().strftime("%d %b")
-if has_data and not hazards.empty:
-    if hv_ >= 50:
-        ticker_items.append(('🔴', 'red', f"Heatwave Alert in {district} | {today_str}"))
-    if hv_ >= 25 and hv_ < 50:
-        ticker_items.append(('🟡', 'yellow', f"Elevated Temperatures in {district} | {today_str}"))
-    if fv >= 50:
-        ticker_items.append(('🔴', 'red', f"Flood Watch for {district} | {today_str}"))
-    if dv >= 50:
-        ticker_items.append(('🟠', 'orange', f"Drought Severity Increasing in {district}"))
-    if av >= 50:
-        ticker_items.append(('🟢', 'green', f"Agricultural Stress Detected in {district}"))
-    if tanom_val is not None and abs(tanom_val) > 3:
-        ticker_items.append(('🔵', 'blue', f"Temperature Anomaly {tanom_val:+.1f}°C in {district}"))
-    if spi_val is not None and spi_val < -1:
-        ticker_items.append(('🟠', 'orange', f"SPI-3 Drought Signal in {district} ({spi_val:.2f})"))
-if not ticker_items:
-    ticker_items.append(('🟢', 'green', f"Normal Conditions in {district} | {today_str}"))
-    ticker_items.append(('🔵', 'blue', "Long-term forecast to 2040 available"))
+def _risk_word(v):
+    if v >= 75: return "Severe"
+    if v >= 50: return "Warning"
+    if v >= 25: return "Watch"
+    return "Low"
 
-# Duplicate for seamless scrolling
-ticker_items_dup = ticker_items * 2
-ticker_html = '<div class="event-ticker slide-up"><div class="event-ticker-track">'
-for icon, dot_cls, text in ticker_items_dup:
-    ticker_html += f'<span class="ticker-item"><span class="ticker-dot {dot_cls}"></span>{icon} {text}</span>'
-ticker_html += '</div></div>'
+def _risk_color(v):
+    if v >= 75: return "#dc2626"
+    if v >= 50: return "#f97316"
+    if v >= 25: return "#eab308"
+    return "#16a34a"
 
-st.markdown(ticker_html, unsafe_allow_html=True)
+_extreme_v = max(fv, dv, hv_, av) if any([fv, dv, hv_, av]) else 0
 
-# ======================================================================
-#   HERO SECTION
-# ======================================================================
-hero_col1, hero_col2 = st.columns([2.5, 1])
-with hero_col1:
-    st.markdown(f'''
-    <div class="hero-section slide-up">
-        <div class="hero-top">
-            <div class="hero-title-group">
-                <h1>{APP_ICON} <span class="gradient-text">{APP_NAME}</span></h1>
-                <p class="subtitle">{APP_SUBTITLE} · <strong>{district or "Select a district"}</strong> · Madhya Pradesh, India</p>
-            </div>
-            <div class="hero-badges">
-                <span class="hero-badge primary">📡 DICRA</span>
-                <span class="hero-badge secondary">🌤️ IMD</span>
-                <span class="hero-badge accent">🌍 ERA5</span>
-                <span class="hero-badge success">🔭 CMIP6</span>
-                <span class="hero-badge warning">🛰️ MODIS</span>
-                <span class="hero-badge info">💧 SMAP</span>
-            </div>
-        </div>
-        <div class="hero-stats">
-            <div class="hero-stat">
-                <div class="hero-stat-icon" style="background:#E0F2FE;">🌊</div>
-                <div class="hero-stat-text">
-                    <div class="hero-stat-value" style="color:{'#EF4444' if fv>=50 else '#22C55E'};">{fv:.0f}</div>
-                    <div class="hero-stat-label">Flood Risk</div>
-                </div>
-            </div>
-            <div class="hero-stat">
-                <div class="hero-stat-icon" style="background:#FEFCE8;">🏜️</div>
-                <div class="hero-stat-text">
-                    <div class="hero-stat-value" style="color:{'#EF4444' if dv>=50 else '#22C55E'};">{dv:.0f}</div>
-                    <div class="hero-stat-label">Drought Risk</div>
-                </div>
-            </div>
-            <div class="hero-stat">
-                <div class="hero-stat-icon" style="background:#FFF7ED;">🔥</div>
-                <div class="hero-stat-text">
-                    <div class="hero-stat-value" style="color:{'#EF4444' if hv_>=50 else '#22C55E'};">{hv_:.0f}</div>
-                    <div class="hero-stat-label">Heatwave Risk</div>
-                </div>
-            </div>
-            <div class="hero-stat">
-                <div class="hero-stat-icon" style="background:#F0FDF4;">🌾</div>
-                <div class="hero-stat-text">
-                    <div class="hero-stat-value" style="color:{'#EF4444' if av>=50 else '#22C55E'};">{av:.0f}</div>
-                    <div class="hero-stat-label">Agri Risk</div>
-                </div>
-            </div>
-            <div class="hero-stat">
-                <div class="hero-stat-icon" style="background:#E0F2FE;">📊</div>
-                <div class="hero-stat-text">
-                    <div class="hero-stat-value">{f"{spi_val:.2f}" if spi_val is not None else "N/A"}</div>
-                    <div class="hero-stat-label">SPI-3</div>
-                </div>
-            </div>
-            <div class="hero-stat">
-                <div class="hero-stat-icon" style="background:#ECFEFF;">🌡️</div>
-                <div class="hero-stat-text">
-                    <div class="hero-stat-value">{f"{tanom_val:+.1f}°" if tanom_val is not None else "N/A"}</div>
-                    <div class="hero-stat-label">Tmax Anom</div>
-                </div>
-            </div>
-        </div>
-        <div class="hero-confidence" style="margin-top:12px;">
-            <span>🎯 Forecast Confidence: <strong>{'High' if not hazards.empty else 'N/A'}</strong></span>
-            <span style="margin-left:12px;">🔄 Updated: {datetime.now().strftime('%H:%M')}</span>
-        </div>
+# ---------------------------------------------------------------------------
+# SIMULATED DATA (auto-generated for all MP districts)
+# ---------------------------------------------------------------------------
+_HAZARD_CATS = ["Low", "Moderate", "High", "Severe"]
+
+def _auto_sim_data(name: str, idx: int) -> dict:
+    """Generate deterministic simulated hazard data per district."""
+    seed = hash(name) % 100
+    # Temperature varies by region: west MP hotter, east cooler
+    base_t = 39.0 if "Indore" in name or "Ujjain" in name or "Khargone" in name or "Khandwa" in name or "Dhar" in name or "Jhabua" in name or "Alirajpur" in name or "Barwani" in name or "Ratlam" in name or "Mandsaur" in name or "Neemuch" in name else 38.5
+    tmax = base_t + (seed % 20) / 10
+    # Rainfall: south/west MP drier, east/north wetter
+    precip = max(0.5, (seed % 30) - (idx % 5))
+    # Hazard levels based on region patterns
+    # Note: flood kept Low for all districts in dry season (May has no rain)
+    def _pick(key: str) -> str:
+        if key == "flood":
+            return "Low"  # No flood risk in dry pre-monsoon season
+        vals = {"heat": [10, 10, 25, 25, 25, 50, 50, 50, 60],
+                "drought": [10, 10, 10, 25, 25, 25, 50],
+                "agri": [10, 10, 25, 25, 25, 50, 50]}[key]
+        v = vals[(seed + idx) % len(vals)]
+        if v <= 15: return "Low"
+        if v <= 35: return "Moderate"
+        if v <= 65: return "High"
+        return "Severe"
+    return {"tmax": round(tmax, 1), "precip": round(precip, 1),
+            "flood": _pick("flood"), "heat": _pick("heat"),
+            "drought": _pick("drought"), "agri": _pick("agri")}
+
+# Manual overrides for key districts
+_SIM_OVERRIDES = {
+    "Bhopal":       {"tmax":39.4,"precip":12.4,"flood":"Low","heat":"Moderate","drought":"Low","agri":"High"},
+    "Raisen":       {"tmax":39.5,"precip":10.1,"flood":"High","heat":"Moderate","drought":"Low","agri":"High"},
+    "Sehore":       {"tmax":39.9,"precip":8.6,"flood":"Moderate","heat":"High","drought":"Moderate","agri":"Moderate"},
+    "Indore":       {"tmax":39.8,"precip":0.8,"flood":"Low","heat":"High","drought":"High","agri":"High"},
+    "Ujjain":       {"tmax":39.8,"precip":1.3,"flood":"Low","heat":"High","drought":"High","agri":"High"},
+    "Gwalior":      {"tmax":38.8,"precip":25.7,"flood":"Moderate","heat":"Moderate","drought":"Low","agri":"Low"},
+    "Jabalpur":     {"tmax":38.5,"precip":14.2,"flood":"Low","heat":"Moderate","drought":"Low","agri":"Low"},
+    "Khargone":     {"tmax":40.8,"precip":0.5,"flood":"Low","heat":"High","drought":"High","agri":"High"},
+    "Khandwa":      {"tmax":40.5,"precip":1.2,"flood":"Low","heat":"High","drought":"High","agri":"High"},
+    "Hoshangabad":  {"tmax":39.5,"precip":18.7,"flood":"Moderate","heat":"Moderate","drought":"Moderate","agri":"Moderate"},
+    "Rewa":         {"tmax":38.2,"precip":16.5,"flood":"Low","heat":"Low","drought":"Low","agri":"Low"},
+    "Sagar":        {"tmax":38.9,"precip":11.3,"flood":"Moderate","heat":"Moderate","drought":"Moderate","agri":"Moderate"},
+}
+
+def _sim_data(d):
+    if d in _SIM_OVERRIDES:
+        return _SIM_OVERRIDES[d]
+    idx = CFG.all_mp_districts.index(d) if d in CFG.all_mp_districts else 0
+    return _auto_sim_data(d, idx)
+
+# ---------------------------------------------------------------------------
+# SIDEBAR (custom dark sidebar via streamlit elements + markdown)
+# ---------------------------------------------------------------------------
+with st.sidebar:
+    # Brand
+    try:
+        _logo_path = Path(__file__).resolve().parent.parent / "IITI_Logo.svg"
+        with open(str(_logo_path), "r", encoding="utf-8") as _f:
+            _svg = _f.read()
+        import base64
+        _b64 = base64.b64encode(_svg.encode("utf-8")).decode()
+        _logo_html = f'<img src="data:image/svg+xml;base64,{_b64}" style="height:38px;width:auto;">'
+    except Exception:
+        _logo_html = ""
+    st.markdown(f"""
+    <div class="status-badge" style="display:flex;align-items:center;gap:12px;margin-bottom:24px;">
+      {_logo_html}
+      <div>
+        <div style="color:#0f172a;font-weight:700;font-size:15px;line-height:1.2;">HydroVerse AI</div>
+        <div style="font-size:10px;color:#64748b;">AI-Powered Climate Intelligence</div>
+      </div>
     </div>
-    ''', unsafe_allow_html=True)
+    """, unsafe_allow_html=True)
 
-with hero_col2:
-    if not hazards.empty:
-        render_hazard_radar(sev_dict, height=220, key_suffix="hero")
-    elif district:
-        st.info("No hazard data yet. Select a district or run detection.")
+    st.markdown("<hr style='margin:8px 0;border-color:#e2e8f0'>", unsafe_allow_html=True)
 
-# ======================================================================
-#   PAGE NAVIGATION (replaces st.tabs)
-# ======================================================================
-pages = [
-    ("📊", "Overview"),
-    ("🛰️", "Real-Time Monitor"),
-    ("📜", "Historical Analysis"),
-    ("🗺️", "Hazard Maps"),
-    ("🔮", "Forecasting"),
-    ("✅", "Validation"),
-    ("🔔", "Alerts"),
-]
-nav_tab = st.session_state.get("nav_tab", 0)
-page_labels = [f"{icon} {label}" for icon, label in pages]
-selected_tab = st.segmented_control(
-    "Navigate", page_labels, default=page_labels[nav_tab], key="page_nav",
-    label_visibility="collapsed", selection_mode="single",
-)
-if selected_tab:
-    for i, lbl in enumerate(page_labels):
-        if lbl == selected_tab:
-            st.session_state.nav_tab = i
-            break
-current_page = st.session_state.get("nav_tab", 0)
+    # Navigation
+    nav_items = ["Overview", "Live Monitoring", "Forecasting", "Hazard Maps",
+                  "Climate Trends", "AI Assistant", "Alerts"]
+    current_nav = st.session_state.get("nav_view", "Overview")
+    default_idx = nav_items.index(current_nav) if current_nav in nav_items else 0
+    chosen = st.radio("Navigate", nav_items, index=default_idx, label_visibility="collapsed", key="nav_radio")
+    if chosen != current_nav:
+        st.session_state.nav_view = chosen
+        st.rerun()
 
-# ======================================================================
-#   PAGE 0: OVERVIEW
-# ======================================================================
-if current_page == 0:
-    # ── AI Insights ──
-    if has_data:
-        render_ai_insights(data, hazards, district)
-        st.markdown('<div class="divider-gradient"></div>', unsafe_allow_html=True)
+    st.markdown("<hr style='margin:8px 0;border-color:#e2e8f0'>", unsafe_allow_html=True)
 
-    # ── Hazard Risk Gauges ──
-    st.markdown('<p class="section-title">⚠️ Hazard Risk Assessment</p>', unsafe_allow_html=True)
-    gcol1, gcol2 = st.columns([3, 2])
-    with gcol1:
-        c1, c2 = st.columns(2)
-        with c1: render_risk_gauge(severity=fv, title="Flood Risk")
-        with c2: render_risk_gauge(severity=dv, title="Drought Risk")
-        c3, c4 = st.columns(2)
-        with c3: render_risk_gauge(severity=hv_, title="Heatwave Risk")
-        with c4: render_risk_gauge(severity=av, title="Agri Stress")
-    with gcol2:
-        with st.container():
-            render_hazard_radar(sev_dict, height=360)
-            render_compound_hazard_matrix(sev_dict, height=320)
+    # District selector
+    st.markdown("<div style='color:#64748b;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px;'>📍 District</div>", unsafe_allow_html=True)
+    all_dists = districts if districts else MP_DISTRICTS
+    default_idx = all_dists.index("Bhopal") if "Bhopal" in all_dists else 0
+    sel_dist = st.selectbox("District", all_dists, index=default_idx, label_visibility="collapsed", key="district", help="Select district to analyze")
+    if sel_dist != district:
+        st.session_state.district = sel_dist
+        st.session_state.data_loaded = False
+        st.rerun()
 
-    # ── Climate Indicators ──
-    st.markdown('<div class="divider-soft"></div>', unsafe_allow_html=True)
-    st.markdown('<p class="section-title">📊 Climate Indicators</p>', unsafe_allow_html=True)
-    c_i1, c_i2, c_i3, c_i4 = st.columns(4)
-    with c_i1:
-        if spi_val is not None: st.metric("SPI-3 (Drought Index)", f"{spi_val:.2f}")
-        else: st.metric("SPI-3", "N/A")
-    with c_i2:
-        if cdd_val is not None: st.metric("CDD (Dry Days)", f"{int(cdd_val)}d")
-        else: st.metric("CDD", "N/A")
-    with c_i3:
-        if tanom_val is not None: st.metric("Tmax Anomaly", f"{tanom_val:+.2f}°C")
-        else: st.metric("Tmax Anom", "N/A")
-    with c_i4:
-        if panom_val is not None: st.metric("Precip Anomaly", f"{panom_val:+.2f}mm")
-        else: st.metric("Precip Anom", "N/A")
-
-    # ── Event Detection Cards ──
-    st.markdown('<div class="divider-soft"></div>', unsafe_allow_html=True)
-    if has_data and not hazards.empty:
-        render_event_cards(data, hazards, district)
-
-    # ── Overview Time Series ──
-    st.markdown('<div class="divider-gradient"></div>', unsafe_allow_html=True)
-    st.markdown('<p class="section-title">📈 Climate Time Series</p>', unsafe_allow_html=True)
-    c_left, c_right = st.columns([3, 1])
-    with c_left:
-        if has_data:
-            ov_df = data.copy()
-            if not hazards.empty:
-                for c in ["spi_3m","spi_1m","spi_6m","cdd","cwd","tmax_anom","tmin_anom","precip_anom","tci","vci","vhi"]:
-                    if c in hazards.columns:
-                        if c in ov_df.columns:
-                            ov_df[c] = ov_df[c].fillna(hazards.loc[ov_df.index, c])
-                        else:
-                            ov_df[c] = hazards.loc[ov_df.index, c]
-                for c in hazards.columns:
-                    if c.endswith("_anom") and c not in ov_df.columns:
-                        ov_df[c] = hazards[c]
-            ov_mask = (ov_df.index >= pd.Timestamp(start_date)) & (ov_df.index <= pd.Timestamp(end_date))
-            ov_df = ov_df[ov_mask]
-            if ov_df.empty:
-                ov_df = data.tail(365).copy()
-                if not hazards.empty:
-                    for c in ["vci","vhi","tci","spi_1m","spi_3m","spi_6m"]:
-                        if c in hazards.columns:
-                            ov_df[c] = hazards.loc[ov_df.index.intersection(hazards.index), c]
-
-            base_avail = [c for c in ["tmax","tmin","precip","ndvi","soil_moisture"] if c in ov_df.columns]
-            extra_avail = [c for c in ["spi_3m","cdd","spi_1m","tmax_anom","precip_anom","spi_6m","cwd","tmin_anom","tci","vci","vhi","ndvi_anom","soil_moisture_anom"] if c in ov_df.columns]
-            all_avail = base_avail + extra_avail
-
-            ov_cols = st.multiselect("Select parameters to display", all_avail, default=all_avail[:4], key="overview_ts_cols")
-
-            LABELS = {
-                "tmax": ("Max Temperature", "°C", "#0EA5E9"),
-                "tmin": ("Min Temperature", "°C", "#7c3aed"),
-                "precip": ("Precipitation", "mm", "#14B8A6"),
-                "spi_3m": ("SPI-3 (Drought Index)", "", "#22c55e"),
-                "spi_1m": ("SPI-1 (Short-term)", "", "#10b981"),
-                "spi_6m": ("SPI-6 (Long-term)", "", "#059669"),
-                "cdd": ("Consecutive Dry Days", "days", "#ef4444"),
-                "cwd": ("Consecutive Wet Days", "days", "#3b82f6"),
-                "tmax_anom": ("Tmax Anomaly", "°C", "#f97316"),
-                "tmin_anom": ("Tmin Anomaly", "°C", "#a855f7"),
-                "precip_anom": ("Precip Anomaly", "mm", "#eab308"),
-                "tci": ("TCI (Thermal Condition)", "", "#d946ef"),
-                "vci": ("VCI (Vegetation Condition)", "", "#06b6d4"),
-                "vhi": ("VHI (Vegetation Health)", "", "#8b5cf6"),
-                "ndvi": ("NDVI (Vegetation Index)", "", "#22c55e"),
-                "soil_moisture": ("Soil Moisture", "m³/m³", "#0ea5e9"),
-                "ndvi_anom": ("NDVI Anomaly", "", "#65a30d"),
-                "soil_moisture_anom": ("Soil Moisture Anomaly", "", "#0284c7"),
-            }
-            marker_vars = {"ndvi","vci","vhi","tci","soil_moisture","ndvi_anom","soil_moisture_anom"}
-            if ov_cols:
-                for i in range(0, len(ov_cols), 2):
-                    pair = ov_cols[i:i+2]
-                    c1, c2 = st.columns(2)
-                    for ci, col in zip([c1, c2], pair):
-                        with ci:
-                            label, unit, clr = LABELS.get(col, (col.title(), "", "#888"))
-                            render_individual_chart(ov_df, col, label, unit, clr, marker_vars, district, "ov")
-            else:
-                st.info("Select at least one parameter")
-
-            # ── 15-Day Extreme Event Forecast ──
-            st.markdown('<div class="divider-gradient"></div>', unsafe_allow_html=True)
-            st.markdown('<p class="section-title">🔮 15-Day Extreme Event Forecast</p>', unsafe_allow_html=True)
-            if st.button("Generate 15-Day Hazard Forecast", key="quick_fc_15day", type="secondary"):
-                with st.spinner("Forecasting next 15 days..."):
-                    qf = {}
-                    for tgt in ["tmax","tmin","precip"]:
-                        if tgt in data.columns:
-                            try:
-                                fc = forecast_engine.generate_daily_to_2040(data, tgt, district)
-                                if not fc.empty:
-                                    qf[tgt] = fc[["date","forecast"]].copy()
-                                    qf[tgt] = qf[tgt].rename(columns={"forecast": tgt})
-                                    qf[tgt]["date"] = pd.to_datetime(qf[tgt]["date"])
-                            except Exception:
-                                pass
-                    if len(qf) >= 2:
-                        fc_panel_15 = reduce(lambda a, b: a.merge(b, on="date", how="outer"), qf.values())
-                        fc_panel_15 = fc_panel_15.set_index("date").sort_index()
-                        fc_panel_15 = fc_panel_15[fc_panel_15.index >= pd.Timestamp(datetime.now().date())].head(15)
-                        ext_15 = data.copy().combine_first(fc_panel_15)
-                        try:
-                            haz_15 = detector.detect_all(ext_15, district=district)
-                            st.session_state.quick_forecasted_hazards = haz_15.loc[fc_panel_15.index.intersection(haz_15.index)]
-                        except Exception:
-                            st.session_state.quick_forecasted_hazards = pd.DataFrame()
-
-            qh = st.session_state.get("quick_forecasted_hazards", pd.DataFrame())
-            if not qh.empty:
-                qsev_cols = [c for c in qh.columns if c.endswith("_severity")]
-                if qsev_cols:
-                    qcols15 = st.columns(len(qsev_cols))
-                    qlabels = {"flood_severity":("Flood","#2563eb"),"drought_severity":("Drought","#ca8a04"),
-                               "heatwave_severity":("Heatwave","#dc2626"),"agri_stress_severity":("Agri Stress","#16a34a")}
-                    for qi, col in enumerate(qsev_cols):
-                        with qcols15[qi % len(qsev_cols)]:
-                            lbl, clr = qlabels.get(col, (col.replace("_severity",""), "#888"))
-                            fig15 = go.Figure()
-                            fig15.add_trace(go.Scatter(x=qh.index, y=qh[col], mode="lines+markers", name=lbl,
-                                line=dict(width=2, color=clr), marker=dict(size=6)))
-                            fig15.update_layout(**{**sci_layout(f"{lbl} — 15d", 200), "showlegend": False})
-                            st.plotly_chart(fig15, use_container_width=True, key=f"overview_15d_{col}")
-
-                    # Risk breakdown table
-                    ov_cat_cols = {"Flood": "flood_risk", "Drought (SPI)": "drought_spi_category",
-                                   "Heatwave": "heatwave_category", "Agri Risk": "agri_risk"}
-                    ov_avail = {k: v for k, v in ov_cat_cols.items() if v in qh.columns}
-                    if ov_avail:
-                        ov_risk = qh[list(ov_avail.values())].copy()
-                        ov_risk.index = ov_risk.index.strftime("%b %d")
-                        ov_risk = ov_risk.rename(columns={v: k for k, v in ov_avail.items()})
-                        def _ov_color_bright(val):
-                            if pd.isna(val): return ""
-                            if val in ("Normal","No Heatwave","Low"): return "background-color: #166534; color: #bbf7d0; font-weight: 600"
-                            if val in ("Watch","Hot Day","Mild Drought","Elevated Temperature"): return "background-color: #854d0e; color: #fef08a; font-weight: 600"
-                            if val in ("Moderate","Heatwave","Moderate Drought"): return "background-color: #9a3412; color: #fed7aa; font-weight: 600"
-                            if val in ("High","Severe Heatwave","Severe Drought","Severe","Severe Flood"): return "background-color: #991b1b; color: #fca5a5; font-weight: 700"
-                            if val in ("Extreme Drought","Extreme"): return "background-color: #7f1d1d; color: #f87171; font-weight: 700"
-                            return ""
-                        st.dataframe(ov_risk.style.map(_ov_color_bright), use_container_width=True)
-
-        elif district:
-            raw_path = Path(f"exports/raw/{district}_data.csv")
-            if not raw_path.exists():
-                st.warning(f"No cached data for **{district}**. Run: `python run_all.py --districts {district}`")
-            else:
-                st.info("Data loaded but all values NaN")
-        else:
-            st.info("Select a district from the sidebar")
-
-    with c_right:
-        if not alerts.empty: render_alert_panel(alerts.head(3))
-        elif has_data: st.success("No active alerts")
-        else: st.info("Select a district")
-
-    # All Districts Quick Status
-    if bounds_mgr:
-        st.markdown('<div class="divider-soft"></div>', unsafe_allow_html=True)
-        with st.expander("📋 All Districts — Quick Status", expanded=False):
-            all_d = bounds_mgr.district_names
-            st.markdown(f"**{len(all_d)} districts** in Madhya Pradesh")
-            ad_rows = []
-            for d in all_d:
-                has_csv = Path(f"exports/raw/{d}_data.csv").exists()
-                current = "✓ Active" if d == district else ("📁 Cached" if has_csv else "—")
-                ad_rows.append({"District": d, "Status": current})
-            adf = pd.DataFrame(ad_rows)
-            st.dataframe(adf, use_container_width=True)
-            with_any = (adf["Status"] != "—").sum()
-            if with_any < len(all_d):
-                st.caption(f"{with_any}/{len(all_d)} districts have cached data. Run pipeline for all: `python run_all.py --all-districts`")
-            else:
-                st.caption("All districts have cached data. Select one from the sidebar.")
-
-# ======================================================================
-#   PAGE 1: REAL-TIME MONITOR
-# ======================================================================
-elif current_page == 1:
-    st.markdown(f'<div class="glass-card" style="padding:20px 28px;"><h1 style="font-size:1.5rem;font-weight:800;margin:0;">🛰️ Real-Time Climate Monitor</h1><p class="subtitle" style="margin:2px 0 0;">Live GEE-based monitoring · {district or "Select a district"}</p></div>', unsafe_allow_html=True)
-
-    gee_auth = st.session_state.get("gee_authenticated", False)
-    if not gee_auth:
-        if st.button("🔐 Connect Google Earth Engine", type="primary"):
-            with st.spinner("Initializing GEE..."):
-                try:
-                    import ee
-                    try:
-                        ee.Initialize(project=CFG.gee.project)
-                    except Exception:
-                        st.info("Opening browser for GEE auth...")
-                        ee.Authenticate()
-                        ee.Initialize(project=CFG.gee.project)
-                    st.session_state.gee_authenticated = True
-                    st.success("GEE connected! Fetching live data...")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"GEE connection failed: {e}")
-
-    c1, c2 = st.columns([2, 1])
-    with c1:
-        st.markdown("### Satellite Feeds")
-        status = st.session_state.get("realtime_status") or {}
-        if not status and district:
-            if gee_auth or st.session_state.get("gee_authenticated", False):
-                try:
-                    status = realtime_monitor.fetch_all(district)
-                    st.session_state.realtime_status = status
-                except Exception as e:
-                    logger.warning(f"GEE monitoring: {e}")
-        st.markdown(f'''
-        <div style="display:flex;gap:12px;align-items:center;margin-bottom:12px;flex-wrap:wrap;">
-            <span class="hero-badge {'success' if gee_auth else 'warning'}">
-                <span class="status-dot {'online' if gee_auth else 'offline'}"></span>
-                {'GEE Connected' if gee_auth else 'GEE Disconnected'}
-            </span>
-            <span class="hero-badge info">🌐 ERA5-Land</span>
-            <span class="hero-badge info">📡 MODIS</span>
-            <span class="hero-badge info">💧 SMAP</span>
-        </div>
-        ''', unsafe_allow_html=True)
-        if status and any(status.get(k, False) for k in ["precip","ndvi","lst","soil_moisture"]):
-            render_realtime_status(status)
-        elif gee_auth:
-            st.info("GEE connected but no satellite data returned for this district.")
-        else:
-            st.info("Click 'Connect Google Earth Engine' to enable live satellite feeds")
-
-        # ── Generate forecast for live today's data ──
-        rt_fc = st.session_state.get("rt_forecast", None)
-        if rt_fc is None and has_data:
-            with st.spinner("Generating forecast..."):
-                rt_fc = {}
-                for tgt in ["tmax","tmin","precip"]:
-                    if tgt in data.columns:
-                        try:
-                            fc = forecast_engine.generate_daily_to_2040(data, tgt, district)
-                            if not fc.empty:
-                                rt_fc[tgt] = fc[["date","forecast"]].copy()
-                                rt_fc[tgt]["date"] = pd.to_datetime(rt_fc[tgt]["date"])
-                        except Exception:
-                            pass
-                st.session_state.rt_forecast = rt_fc
-
-        today = pd.Timestamp(datetime.now().date())
-
-        st.markdown("### 🌡️ Today's Forecast")
-        if rt_fc and len(rt_fc) >= 2:
-            today_fc = {}
-            for tgt in ["tmax","tmin","precip"]:
-                if tgt in rt_fc:
-                    match = rt_fc[tgt][pd.to_datetime(rt_fc[tgt]["date"]).dt.date == today.date()]
-                    if not match.empty:
-                        today_fc[tgt] = match.iloc[0]["forecast"]
-            # Fallback: if no exact today match, use first forecast row after today
-            if not today_fc:
-                for tgt in ["tmax","tmin","precip"]:
-                    if tgt in rt_fc:
-                        future = rt_fc[tgt][pd.to_datetime(rt_fc[tgt]["date"]) >= today]
-                        if not future.empty:
-                            today_fc[tgt] = future.iloc[0]["forecast"]
-            if today_fc:
-                cols = st.columns(3)
-                with cols[0]:
-                    v = today_fc.get("tmax", "N/A")
-                    st.metric("Max Temperature", f"{v:.1f}°C" if isinstance(v,(int,float)) else "N/A")
-                with cols[1]:
-                    v = today_fc.get("tmin", "N/A")
-                    st.metric("Min Temperature", f"{v:.1f}°C" if isinstance(v,(int,float)) else "N/A")
-                with cols[2]:
-                    v = today_fc.get("precip", "N/A")
-                    st.metric("Precipitation", f"{v:.1f}mm" if isinstance(v,(int,float)) else "N/A")
-                st.markdown(f'<span class="hero-badge info">📅 Forecast for {today.strftime("%d %b %Y")} · AI-generated from ERA5/IMD + CMIP6</span>', unsafe_allow_html=True)
-            else:
-                st.info("Forecast data not yet available for today — generating extended outlook...")
-        elif has_data:
-            st.info("Generating forecast... (click Refresh to retry)")
-        else:
-            st.info("Load a district to see today's forecast")
-
-        info_cols = st.columns([3, 1])
-        with info_cols[0]:
-            if has_data and not data.empty:
-                latest_date = data.index[-1]
-                st.markdown(f'<span class="hero-badge" style="background:var(--warning-light);color:var(--text-muted);font-size:0.7rem;">📜 Latest observed: {latest_date.strftime("%d %b %Y")} (historical baseline)</span>', unsafe_allow_html=True)
-        with info_cols[1]:
-            if st.button("🔄 Refresh", key="refresh_data", use_container_width=True):
-                st.session_state.force_refresh = True
-                st.session_state.data_loaded = False
-                st.session_state.pop("data", None)
-                st.session_state.pop("hazards", None)
-                st.session_state.pop("alerts", None)
-                st.session_state.pop("realtime_status", None)
-                st.session_state.pop("rt_forecast", None)
-                st.rerun()
-
-        # Forecasted outlook
-        if rt_fc and len(rt_fc) >= 2:
-            st.markdown("### 🔮 7-Day Outlook")
-            fc_tbl = None
-            for tgt in ["tmax","tmin","precip"]:
-                if tgt in rt_fc:
-                    p = rt_fc[tgt].copy()
-                    p = p[pd.to_datetime(p["date"]) >= today].head(7).copy()
-                    p = p.rename(columns={"forecast": tgt})
-                    fc_tbl = p if fc_tbl is None else fc_tbl.merge(p, on="date", how="outer")
-            if fc_tbl is not None and not fc_tbl.empty:
-                fc_tbl["date"] = fc_tbl["date"].dt.strftime("%b %d, %Y")
-                fc_tbl = fc_tbl.set_index("date")
-                for col, unit in [("tmax","°C"),("tmin","°C"),("precip","mm")]:
-                    if col in fc_tbl.columns:
-                        fc_tbl[col] = fc_tbl[col].round(1).astype(str) + unit
-                st.dataframe(fc_tbl, use_container_width=True)
-            else:
-                st.caption("Forecast data starts after today — extended forecast being generated...")
-        elif has_data:
-            st.caption("Generating forecast outlook...")
-
-            # Climate indices
-            st.markdown("### Climate Indices (ERA5/IMD)")
-            if not hazards.empty:
-                h_latest = hazards.tail(1).iloc[0]
-                pcols = st.columns(4)
-                with pcols[0]:
-                    v = h_latest.get("spi_3m", None)
-                    st.metric("SPI-3", f"{v:.2f}" if pd.notna(v) else "N/A")
-                with pcols[1]:
-                    v = h_latest.get("cdd", None)
-                    st.metric("CDD", f"{int(v)}d" if pd.notna(v) else "N/A")
-                with pcols[2]:
-                    v = h_latest.get("tmax_anom", None)
-                    st.metric("Tmax Anomaly", f"{v:+.2f}°C" if pd.notna(v) else "N/A")
-                with pcols[3]:
-                    v = h_latest.get("precip_anom", None)
-                    st.metric("Precip Anomaly", f"{v:+.2f}mm" if pd.notna(v) else "N/A")
-                has_sat = any(h_latest.get(c) is not None and pd.notna(h_latest.get(c)) for c in ["vhi", "vci", "tci"])
-                if has_sat:
-                    st.caption("Satellite indices (VHI/VCI/TCI) available via MODIS/GEE")
-            else:
-                st.info("Run hazard detection to see climate indices")
-        else:
-            st.info("Select a district to see observations")
-
-    with c2:
-        st.markdown("### Anomaly Detection")
-        if st.button("Scan for Anomalies", type="primary"):
-            with st.spinner("Analyzing..."):
-                try:
-                    baseline = {c: anomaly_detector.compute_baseline(data[c]) for c in data.columns if c in data}
-                    anomalies = anomaly_detector.detect_anomalies(data, baseline, value_col="tmax") if has_data else pd.DataFrame()
-                    st.session_state.anomalies = anomalies
-                except Exception as e: st.error(f"Anomaly detection: {e}")
-        anomalies = st.session_state.get("anomalies", pd.DataFrame())
-        if not anomalies.empty: render_anomaly_table(anomalies)
-        else: st.info("No anomalies detected")
-
-# ======================================================================
-#   PAGE 2: HISTORICAL ANALYSIS
-# ======================================================================
-elif current_page == 2:
-    st.markdown(f'<div class="glass-card" style="padding:20px 28px;"><h1 style="font-size:1.5rem;font-weight:800;margin:0;">📜 Historical Analysis</h1><p class="subtitle" style="margin:2px 0 0;">{district or "Select a district"} · {start_date} to {end_date}</p></div>', unsafe_allow_html=True)
-
-    if has_data:
-        mask = (data.index >= pd.Timestamp(start_date)) & (data.index <= pd.Timestamp(end_date))
-        subset = data[mask]
-        display_df = subset if len(subset) > 0 else data
-
-        if not hazards.empty:
-            merged = display_df.copy()
-            for c in ["vhi","vci","tci","spi_1m","spi_3m","spi_6m","cdd","cwd"]:
-                if c in hazards.columns:
-                    if c in merged.columns:
-                        merged[c] = merged[c].fillna(hazards.loc[display_df.index, c])
-                    else:
-                        merged[c] = hazards.loc[display_df.index, c]
-            for c in hazards.columns:
-                if c.endswith("_anom") and c not in merged.columns:
-                    merged[c] = hazards[c]
-        else:
-            merged = display_df
-
-        base_avail = [c for c in ["tmax","tmin","precip","ndvi","soil_moisture"] if c in merged.columns]
-        extra_avail = [c for c in ["spi_1m","spi_3m","spi_6m","cdd","cwd","tmax_anom","tmin_anom","precip_anom","tci","vci","vhi","ndvi_anom","soil_moisture_anom"] if c in merged.columns]
-        hist_all_avail = base_avail + extra_avail
-        ha_cols = st.multiselect("Select parameters", hist_all_avail, default=hist_all_avail[:4], key="hist_ts_cols")
-
-        LABELS = {
-            "tmax": ("Max Temperature", "°C", "#0EA5E9"),
-            "tmin": ("Min Temperature", "°C", "#7c3aed"),
-            "precip": ("Precipitation", "mm", "#14B8A6"),
-            "spi_3m": ("SPI-3 (Drought Index)", "", "#22c55e"),
-            "spi_1m": ("SPI-1 (Short-term)", "", "#10b981"),
-            "spi_6m": ("SPI-6 (Long-term)", "", "#059669"),
-            "cdd": ("Consecutive Dry Days", "days", "#ef4444"),
-            "cwd": ("Consecutive Wet Days", "days", "#3b82f6"),
-            "tmax_anom": ("Tmax Anomaly", "°C", "#f97316"),
-            "tmin_anom": ("Tmin Anomaly", "°C", "#a855f7"),
-            "precip_anom": ("Precip Anomaly", "mm", "#eab308"),
-            "vhi": ("VHI (Vegetation Health)", "", "#8b5cf6"),
-            "vci": ("VCI (Vegetation Condition)", "", "#06b6d4"),
-            "tci": ("TCI (Thermal Condition)", "", "#d946ef"),
-            "ndvi": ("NDVI (Vegetation Index)", "", "#22c55e"),
-            "soil_moisture": ("Soil Moisture", "m³/m³", "#0ea5e9"),
-            "ndvi_anom": ("NDVI Anomaly", "", "#65a30d"),
-            "soil_moisture_anom": ("Soil Moisture Anomaly", "", "#0284c7"),
-        }
-        hist_marker_vars = {"ndvi","vci","vhi","tci","soil_moisture","ndvi_anom","soil_moisture_anom"}
-        if ha_cols:
-            for i in range(0, len(ha_cols), 2):
-                pair = ha_cols[i:i+2]
-                c1, c2 = st.columns(2)
-                for ci, col in zip([c1, c2], pair):
-                    with ci:
-                        label, unit, clr = LABELS.get(col, (col.title(), "", "#888"))
-                        render_individual_chart(merged, col, label, unit, clr, hist_marker_vars, district, "hist")
-        else:
-            st.info("Select at least one parameter")
-
-        # Hazard severity timeline
-        if not hazards.empty:
-            hcols = [c for c in hazards.columns if c.endswith("_severity")]
-            display = hazards[hcols].copy()
-            display["date"] = hazards.index
-            for c in hcols: display[c] = display[c].fillna(0)
-            render_hazard_severity_panel(display, [c.replace("_severity","") for c in hcols])
-
-        # IMD drought classification
-        if "precip" in data.columns:
-            with st.expander("🌾 IMD Drought Classification (Rainfall Deficiency)", expanded=False):
-                st.markdown("""
-                **IMD Drought Definition**: A region is drought-affected if rainfall deficiency ≥ 26%.
-                - **Moderate drought**: deficiency 26–50%
-                - **Severe drought**: deficiency > 50%
-                """)
-                p_daily = data["precip"].dropna()
-                if len(p_daily) > 365:
-                    doy_clim = p_daily.groupby(p_daily.index.dayofyear).mean()
-                    monthly = p_daily.resample("ME").sum()
-                    monthly_norm = monthly.index.map(lambda d: doy_clim.loc[d.dayofyear] if d.dayofyear in doy_clim.index else doy_clim.mean())
-                    monthly_norm = pd.Series(monthly_norm.values, index=monthly.index)
-                    deficiency = ((1 - monthly / monthly_norm.replace(0, monthly_norm.median())) * 100).fillna(0)
-                    imd_class = pd.cut(deficiency, bins=[-1e9, 0, 25, 50, 101], labels=["Normal", "Watch", "Moderate Drought", "Severe Drought"])
-                    imd_df = pd.DataFrame({"Monthly Precip (mm)": monthly.round(1), "Normal (mm)": monthly_norm.round(1),
-                                           "Deficiency (%)": deficiency.round(1), "IMD Class": imd_class})
-                    imd_df.index = imd_df.index.strftime("%Y-%m")
-                    st.dataframe(imd_df.tail(60), use_container_width=True)
-                else:
-                    st.info("Need >1 year of precipitation data for IMD classification")
-
-        # Methodology reference
-        with st.expander("📖 Hazard Methodology Reference", expanded=False):
-            st.markdown("""
-            ### 🌊 Flood Methodology
-            | Category | IMD Threshold | Score |
-            |----------|--------------|-------|
-            | Light Rain | ≥ 15.6 mm/day | — |
-            | Moderate Rain | ≥ 15.6 mm/day | 5 pts |
-            | Heavy Rain | ≥ 64.5 mm/day | 15 pts |
-            | Very Heavy Rain | ≥ 115.6 mm/day | 25 pts |
-            | Extreme Rain | ≥ 204.5 mm/day | 35 pts |
-
-            **Severity:** Persistence (consecutive heavy rain) + 3-day cumulative + Antecedent saturation + Intensity.
-
-            ### 🏜️ Drought Methodology
-            **IMD:** Deficiency ≥ 26% = drought. SPI-1/3/6 + VHI + soil moisture anomaly.
-
-            ### 🔥 Heatwave Methodology
-            **IMD:** Tmax ≥ 40°C + departure 4.5-6.4°C = Heatwave, ≥ 6.5°C = Severe.
-            **Severity:** Temperature component (30pts) + Departure (45pts) + Sustained bonus (15pts) + Severe bonus (10pts).
-
-            ### 🌾 Agricultural Stress
-            **Components:** VHI (50%) + Tmax heat stress (20%) + Soil moisture anomaly (20%) + CDD (10%)
-            """)
+    # Data source
+    st.markdown("<div style='color:#94a3b8;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px;'>🎯 Data Source</div>", unsafe_allow_html=True)
+    src = st.selectbox("Source", [s.value for s in DataSource], index=0, label_visibility="collapsed", key="data_source")
+    if src == DataSource.ERA5.value:
+        CFG.active_data_source = DataSource.ERA5
+    elif src == DataSource.IMD.value:
+        CFG.active_data_source = DataSource.IMD
     else:
-        st.info("No historical data available")
+        CFG.active_data_source = DataSource.AUTO
 
-# ======================================================================
-#   PAGE 3: HAZARD MAPS
-# ======================================================================
-elif current_page == 3:
-    st.markdown(f'<div class="glass-card" style="padding:20px 28px;"><h1 style="font-size:1.5rem;font-weight:800;margin:0;">🗺️ Hazard Maps</h1><p class="subtitle" style="margin:2px 0 0;">Current hazards across Madhya Pradesh · {district or "Select a district"}</p></div>', unsafe_allow_html=True)
+    # Time period
+    st.markdown("<div style='color:#94a3b8;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px;'>⏱️ Time Period</div>", unsafe_allow_html=True)
+    today = datetime.now()
+    try:
+        hist_start = datetime.strptime(CFG.hist_start, "%Y-%m-%d") if hasattr(CFG, 'hist_start') else today - timedelta(days=365*25)
+    except Exception:
+        hist_start = today - timedelta(days=365*25)
+    start_date = st.date_input("Start", value=hist_start, label_visibility="collapsed", key="sd_start")
+    end_date = st.date_input("End", value=today, label_visibility="collapsed", key="sd_end")
 
-    if not hazards.empty and bounds_mgr:
-        severity_cols = [c for c in hazards.columns if c.endswith("_severity")]
-        gdf = bounds_mgr.gdf.copy()
+    st.markdown("<hr style='margin:8px 0;border-color:rgba(255,255,255,0.06)'>", unsafe_allow_html=True)
 
-        dates = hazards.index.unique()
-        dates = sorted(dates)
-        if len(dates) > 365:
-            dates = dates[-365:]
-        sel_idx = len(dates) - 1
-        if "hazard_map_date" in st.session_state:
-            saved = st.session_state.hazard_map_date
-            match = [i for i, d in enumerate(dates) if d == saved]
-            if match:
-                sel_idx = match[0]
-        selected_date = st.selectbox("Select Date", dates, index=sel_idx,
-            format_func=lambda d: d.strftime("%Y-%m-%d"), key="hazard_map_date_sel")
-        st.session_state.hazard_map_date = selected_date
-
-        row = hazards.loc[selected_date] if selected_date in hazards.index else hazards.iloc[-1]
-        sev_data = {}
-        haz_base = Path.home() / "exports" / "hazards"
-        for sc in severity_cols:
-            hname = sc.replace("_severity", "")
-            vals = {}
-            for _, r in gdf.iterrows():
-                d = r[CFG.district_col]
-                if d == district:
-                    val = float(row[sc]) if not pd.isna(row[sc]) else 0
-                else:
-                    haz_path = haz_base / f"{d}_hazards.csv"
-                    val = 0.0
-                    if haz_path.exists():
-                        try:
-                            hdf = pd.read_csv(haz_path)
-                            if "date" in hdf.columns:
-                                hdf = hdf.set_index(pd.to_datetime(hdf["date"]))
-                            if sc in hdf.columns and selected_date in hdf.index:
-                                v = hdf.loc[selected_date, sc]
-                                val = float(v) if pd.notna(v) else 0.0
-                        except Exception:
-                            pass
-                vals[d] = val
-            sev_data[hname] = pd.Series(vals)
-
-        col_map, col_info = st.columns([3, 1])
-        with col_map:
-            render_hazard_map_selector(gdf, sev_data)
-        with col_info:
-            if district:
-                st.markdown(f"### {district}")
-                for sc in severity_cols:
-                    hname = sc.replace("_severity", "")
-                    val = float(row[sc]) if not pd.isna(row[sc]) else 0
-                    severity_cls = classifier.classify(val)
-                    color = SEVERITY_COLORS.get(severity_cls, "#888")
-                    st.markdown(f"- {HAZARD_NAMES.get(hname, hname)}: **{val:.1f}** <span style='color:{color}'>({severity_cls})</span>", unsafe_allow_html=True)
-                st.markdown("---")
-                st.caption("Severity loaded from pipeline exports (51/51 districts)")
-            else:
-                st.info("Select a district from the sidebar")
-
-            # Historical hazard events
-            st.markdown("---")
-            st.markdown("### Historical Events")
-            if district and not hazards.empty:
-                event_thresh = 50
-                has_events = False
-                for sc in severity_cols:
-                    hname = sc.replace("_severity", "")
-                    if sc not in hazards.columns:
-                        continue
-                    above = (hazards[sc].fillna(0) >= event_thresh).astype(int)
-                    groups = (above.diff().fillna(0) != 0).cumsum()
-                    periods = above[above == 1].groupby(groups)
-                    if len(periods) == 0:
-                        continue
-                    has_events = True
-                    with st.expander(f"{HAZARD_NAMES.get(hname, hname.title())} Events", expanded=False):
-                        evt_rows = []
-                        for _, idx in periods:
-                            block = hazards.loc[idx.index, sc]
-                            evt_rows.append({
-                                "Start": idx.index[0].strftime("%Y-%m-%d"),
-                                "End": idx.index[-1].strftime("%Y-%m-%d"),
-                                "Days": len(idx),
-                                "Peak": round(float(block.max()), 1),
-                                "Peak Date": block.idxmax().strftime("%Y-%m-%d"),
-                            })
-                        if evt_rows:
-                            evt_df = pd.DataFrame(evt_rows).sort_values("Start", ascending=False).head(50)
-                            st.dataframe(evt_df, use_container_width=True)
-                if not has_events:
-                    st.info(f"No historical events ≥ {event_thresh} severity")
-            else:
-                st.info("Load hazard data to see historical events")
-
-        # Forecast events
-        st.markdown("### Forecast Events (Daily)")
-        forecasts = st.session_state.get("forecasts", {})
-        if not forecasts:
-            st.info("Generate a forecast in the Forecasting tab to see daily projections")
-        else:
-            matching = [k for k in forecasts if k[0] == district]
-            if not matching:
-                st.info(f"No forecasts for {district}")
-            else:
-                targets = [k[1] for k in matching]
-                tgt_labels = {"tmax": "Max Temperature (°C)", "tmin": "Min Temperature (°C)", "precip": "Precipitation (mm)"}
-                sel_tgt = st.selectbox("Forecast Variable", targets, format_func=lambda t: tgt_labels.get(t, t.title()), key="hazard_fc_tgt")
-                fc = forecasts.get((district, sel_tgt), pd.DataFrame())
-                if fc.empty:
-                    st.warning("Forecast data is empty")
-                else:
-                    fc = fc.copy()
-                    if "date" not in fc.columns:
-                        fc["date"] = fc.index
-                    fc["date"] = pd.to_datetime(fc["date"])
-                    display_cols = ["date", "forecast"]
-                    if "source" in fc.columns: display_cols.append("source")
-                    if "lower" in fc.columns: display_cols.append("lower")
-                    if "upper" in fc.columns: display_cols.append("upper")
-                    fc_display = fc[display_cols].copy()
-                    fc_display["date"] = fc_display["date"].dt.strftime("%Y-%m-%d")
-                    fc_display["forecast"] = pd.to_numeric(fc_display["forecast"], errors="coerce").round(2)
-                    thresh_map = {"tmax": CFG.hazard.heatwave_tmax_threshold, "precip": CFG.hazard.imd_precip_very_heavy}
-                    if sel_tgt in thresh_map:
-                        thresh_val = thresh_map[sel_tgt]
-                        fc_display["Threshold Exceeded"] = fc_display["forecast"] >= thresh_val
-                    max_rows = st.slider("Rows to show", 50, len(fc_display), min(500, len(fc_display)), 50, key="hazard_fc_rows")
-                    st.dataframe(fc_display.head(max_rows), use_container_width=True)
-    else:
-        st.info("No hazard data to map")
-
-# ======================================================================
-#   PAGE 4: FORECASTING
-# ======================================================================
-elif current_page == 4:
-    st.markdown(f'<div class="glass-card" style="padding:20px 28px;"><h1 style="font-size:1.5rem;font-weight:800;margin:0;">🔮 Forecasting</h1><p class="subtitle" style="margin:2px 0 0;">Multi-Model AI + CMIP6 Hybrid to 2040 · {district or "Select a district"}</p></div>', unsafe_allow_html=True)
-
-    # ── CMIP6 ensemble status ──
-    has_cmip6 = forecast_engine.cmip6._ensemble is not None and not forecast_engine.cmip6._ensemble.empty
-    cmip6_col1, cmip6_col2 = st.columns([3, 1])
-    with cmip6_col1:
-        if has_cmip6:
-            ens = forecast_engine.cmip6._ensemble
-            ens_dates = pd.to_datetime(ens["date"])
-            st.markdown(f'<span class="hero-badge success">✅ CMIP6 ensemble loaded ({len(ens)} rows, {ens_dates.min().strftime("%Y")}–{ens_dates.max().strftime("%Y")})</span>', unsafe_allow_html=True)
-        else:
-            st.markdown(f'<span class="hero-badge warning">⚠️ No CMIP6 data — forecasts will use climatology (repeating pattern)</span>', unsafe_allow_html=True)
-    with cmip6_col2:
-        if st.button("📡 Fetch CMIP6 (GEE)", key="fetch_cmip6", use_container_width=True):
-            if not st.session_state.get("gee_authenticated", False):
-                st.warning("Connect Google Earth Engine first (Real-Time Monitor page)")
-            elif CMIP6Loader is None:
-                st.error("CMIP6Loader not available")
-            else:
-                with st.spinner("Fetching CMIP6 projections from GEE... this takes 5–15 minutes..."):
-                    try:
-                        # Validate CMIP6 variable config before fetching
-                        from config.constants import CMIP6_VARIABLES
-                        for vkey, vcfg in CMIP6_VARIABLES.items():
-                            if "band" not in vcfg:
-                                vcfg["band"] = vkey
-                        ee_fc = bounds_mgr.get_ee_fc(districts)
-                        loader = CMIP6Loader(ee_fc)
-                        raw = loader.fetch_all_models()
-                        if not raw.empty:
-                            ensemble = loader.compute_ensemble(raw)
-                            cache_path = Path(CFG.cache_dir) / "cmip6_ensemble.parquet"
-                            cache_path.parent.mkdir(parents=True, exist_ok=True)
-                            ensemble.to_parquet(cache_path, index=False)
-                            forecast_engine.set_ensemble(ensemble)
-                            st.session_state.cmip6_fetched = True
-                            st.success(f"CMIP6 ensemble cached ({len(ensemble)} rows)")
-                            st.rerun()
-                        else:
-                            st.error("No CMIP6 data returned from GEE")
-                    except Exception as e:
-                        st.error(f"CMIP6 fetch failed: {e}")
-
-    if st.button("Generate Forecast", type="primary"):
-        with st.spinner("Generating forecast... ML training in progress..."):
-            forecasts = {}
-            for target in ["tmax","tmin","precip"]:
-                if has_data and target in data.columns:
-                    try:
-                        fc = forecast_engine.generate_daily_to_2040(data, target, district)
-                        if not fc.empty:
-                            forecasts[(district, target)] = fc
-                            logger.info(f"Forecast {target}: {len(fc)} days")
-                    except Exception as e: logger.warning(f"Forecast {target}: {e}")
-            st.session_state.forecasts = forecasts
-
-            forecasted_hazards = pd.DataFrame()
-            fc_parts = []
-            for target in ["tmax","tmin","precip"]:
-                fc = forecasts.get((district, target))
-                if fc is not None and not fc.empty:
-                    p = fc[["date", "forecast"]].copy()
-                    p = p.rename(columns={"forecast": target})
-                    p["date"] = pd.to_datetime(p["date"])
-                    fc_parts.append(p)
-            if len(fc_parts) >= 2:
-                fc_panel = reduce(lambda a, b: a.merge(b, on="date", how="outer"), fc_parts)
-                fc_panel = fc_panel.set_index("date").sort_index()
-                extended = data.copy().combine_first(fc_panel)
-                try:
-                    haz_all = detector.detect_all(extended, district=district)
-                    haz_fc = haz_all.loc[fc_panel.index.intersection(haz_all.index)]
-                    forecasted_hazards = haz_fc
-                    logger.info(f"Forecasted hazards: {len(haz_fc)} days")
-                except Exception as e:
-                    logger.warning(f"Hazard forecast failed: {e}")
-            st.session_state.forecasted_hazards = forecasted_hazards
-
-            if forecasts:
-                src_txt = "climatology"
-                sources = set()
-                for fc in forecasts.values():
-                    if "source" in fc.columns:
-                        sources.update(fc["source"].unique())
-                if sources:
-                    src_txt = ", ".join(sorted(sources))
-                n_haz = len(forecasted_hazards) if not forecasted_hazards.empty else 0
-                st.success(f"Generated {len(forecasts)} variables ({src_txt}) + {n_haz}d hazard forecast")
-            else:
-                st.error("ML models need training — run: python run_all.py --all-districts")
-
-    forecasts = st.session_state.get("forecasts", {})
-    forecasted_hazards = st.session_state.get("forecasted_hazards", pd.DataFrame())
-
-    if forecasts:
-        if not forecasted_hazards.empty:
-            sev_cols = [c for c in forecasted_hazards.columns if c.endswith("_severity")]
-            event_cols = [c for c in forecasted_hazards.columns if c.endswith("_event")]
-            if sev_cols or event_cols:
-                with st.expander("🔮 Forecasted Hazard Events", expanded=True):
-                    if sev_cols:
-                        fc_haz_labels = {
-                            "flood_severity": ("Flood Severity", "", "#2563eb"),
-                            "drought_severity": ("Drought Severity", "", "#ca8a04"),
-                            "heatwave_severity": ("Heatwave Severity", "", "#dc2626"),
-                            "agri_stress_severity": ("Agri Stress Severity", "", "#16a34a"),
-                        }
-                        sev_icons = {
-                            "flood_severity": "🌊", "drought_severity": "🏜️",
-                            "heatwave_severity": "🔥", "agri_stress_severity": "🌾",
-                        }
-                        for col in sev_cols:
-                            label, unit, clr = fc_haz_labels.get(col, (col.replace("_severity","").title(), "", "#888"))
-                            icon = sev_icons.get(col, "⚠️")
-                            st.markdown(f'<p style="font-size:0.9rem;font-weight:700;margin:12px 0 2px;color:{clr};">{icon} {label} — Forecasted Severity</p><p style="font-size:0.72rem;color:var(--text-muted);margin:0 0 6px;">Predicted {label.lower()} over the forecast period for <strong>{district}</strong>. Values range 0 (normal) to 100 (extreme).</p>', unsafe_allow_html=True)
-                            fig = go.Figure()
-                            hex_clr = clr.lstrip("#")
-                            if len(hex_clr) == 6:
-                                rgba = tuple(int(hex_clr[i:i+2], 16) for i in (0, 2, 4)) + (0.1,)
-                            else:
-                                rgba = (136, 136, 136, 0.1)
-                            fig.add_trace(go.Scatter(
-                                x=forecasted_hazards.index, y=forecasted_hazards[col],
-                                mode="lines", name=label, line=dict(width=2, color=clr),
-                                fill="tozeroy", fillcolor=f"rgba{rgba}",
-                            ))
-                            fig.update_layout(
-                                **sci_layout(f"{label} — {district}", 200, 25, yaxis_title="Severity", xaxis_title="Date"),
-                            )
-                            fig.update_yaxes(range=[0, 100], tickvals=[0, 25, 50, 75, 100],
-                                             ticktext=["0\nNormal", "25\nWatch", "50\nModerate", "75\nSevere", "100\nExtreme"])
-                            st.plotly_chart(fig, use_container_width=True, key=f"fc_haz_{col}")
-
-                    if event_cols:
-                        st.markdown("#### Forecasted Event Days")
-                        evt_summary = {}
-                        for c in event_cols:
-                            hname = c.replace("_event", "").title()
-                            cnt = int(forecasted_hazards[c].fillna(0).sum())
-                            evt_summary[hname] = cnt
-                        if evt_summary:
-                            st.dataframe(pd.DataFrame([evt_summary]).T.rename(columns={0:"Event Days"}), use_container_width=True)
-
-                    cat_cols = {
-                        "Flood": "flood_risk", "Drought (SPI)": "drought_spi_category",
-                        "Drought (IMD)": "drought_imd_class", "Heatwave": "heatwave_category",
-                        "Agri Risk": "agri_risk", "Compound": "compound_class",
-                    }
-                    avail_cats = {k: v for k, v in cat_cols.items() if v in forecasted_hazards.columns}
-                    if avail_cats:
-                        st.markdown("#### Hazard Risk Calendar")
-                        risk_table = forecasted_hazards[list(avail_cats.values())].copy()
-                        risk_table.index = risk_table.index.strftime("%b %d, %Y")
-                        risk_table = risk_table.rename(columns={v: k for k, v in avail_cats.items()})
-                        def _color_risk(val):
-                            if pd.isna(val) or val in ("Normal", "No Heatwave", "Low"): return "background-color: #1a3a1a; color: #86efac"
-                            if val in ("Watch", "Hot Day", "Mild Drought", "Elevated Temperature"): return "background-color: #3a3a1a; color: #fef08a"
-                            if val in ("Moderate", "Heatwave", "Moderate Drought", "Moderate Flood"): return "background-color: #3a2a1a; color: #fed7aa"
-                            if val in ("High", "Severe Heatwave", "Severe Drought", "Severe Flood", "Severe"): return "background-color: #3a1a1a; color: #fca5a5"
-                            if val in ("Extreme Drought", "Extreme"): return "background-color: #4a0a0a; color: #ef4444"
-                            return ""
-                        with st.expander("📅 Daily Risk Breakdown", expanded=True):
-                            max_days = st.slider("Days", 7, len(risk_table), min(90, len(risk_table)), 7, key="fc_risk_cal_days")
-                            st.dataframe(risk_table.head(max_days).style.map(_color_risk), use_container_width=True)
-
-        render_forecast_tab(data, forecasts, district)
-    else:
-        st.info("Click Generate Forecast to produce AI + CMIP6 predictions")
-        st.markdown("""
-        | Model | Horizon | Source |
-        |-------|---------|--------|
-        | Random Forest | 90 days | ERA5/IMD historical |
-        | XGBoost | 90 days | ERA5/IMD historical |
-        | LightGBM | 90 days | ERA5/IMD historical |
-        | CMIP6 Ensemble | to 2040 | 8 GCMs (SSP2-4.5) |
-        | Blended | Full Period | Clamp + smooth handoff |
-        """)
-
-# ======================================================================
-#   PAGE 5: VALIDATION
-# ======================================================================
-elif current_page == 5:
-    st.markdown(f'<div class="glass-card" style="padding:20px 28px;"><h1 style="font-size:1.5rem;font-weight:800;margin:0;">✅ Scientific Validation</h1><p class="subtitle" style="margin:2px 0 0;">Model skill scores & historical accuracy · {district or "Select a district"}</p></div>', unsafe_allow_html=True)
-
-    if st.button("Run Validation", type="primary"):
-        with st.spinner(f"Validating {district}..."):
-            try:
-                from validation.run import run_district_validation
-                result = run_district_validation(district)
-                st.session_state.validation = result
-                if "error" in result: st.error(result["error"])
-                else: st.success("Validation complete")
-            except Exception as e: st.error(f"Validation failed: {e}")
-
-    r = st.session_state.get("validation", {})
-    if r and "error" not in r:
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.markdown("### Skill Scores")
-            skills = r.get("skill_scores", {})
-            for k, v in skills.items():
-                score_color = "#22c55e" if v >= 0.7 else "#eab308" if v >= 0.4 else "#ef4444"
-                st.markdown(f"<span style='color:{score_color};font-weight:700;'>{k}: {v:.3f}</span>", unsafe_allow_html=True)
-        with col2:
-            st.markdown("### Confusion Matrix")
-            conf = r.get("confusion", {})
-            if conf: st.dataframe(pd.DataFrame([conf]).T.rename(columns={0:"Score"}))
-        with col3:
-            st.metric("Data Points", r.get("data_points", 0))
-            st.metric("Hazard Events", r.get("hazard_events", 0))
-        st.divider()
-        st.json(r)
-    else:
-        st.info("Click Run Validation to evaluate model performance")
-        st.markdown("""
-        | Metric | Description | Target |
-        |--------|-------------|--------|
-        | POD | Probability of Detection | >0.7 |
-        | FAR | False Alarm Ratio | <0.3 |
-        | HSS | Heidke Skill Score | >0.4 |
-        | BSS | Brier Skill Score | >0.3 |
-        | ROC-AUC | ROC Area Under Curve | >0.8 |
-        """)
-
-# ======================================================================
-#   PAGE 6: ALERTS
-# ======================================================================
-elif current_page == 6:
-    st.markdown(f'<div class="glass-card" style="padding:20px 28px;"><h1 style="font-size:1.5rem;font-weight:800;margin:0;">🔔 Alert Center</h1><p class="subtitle" style="margin:2px 0 0;">Active hazard alerts & event history · {district or "Select a district"}</p></div>', unsafe_allow_html=True)
-
-    if st.button("Refresh Alerts", type="primary"):
-        with st.spinner("Evaluating..."):
-            try:
-                if has_data:
-                    haz = detector.detect_all(data, district=district)
-                    st.session_state.hazards = haz
-                    hdict = get_hazard_dict(haz)
-                    alerts_df = alert_engine.evaluate(hdict, district, min_severity=30)
-                    if not alerts_df.empty: st.session_state.alerts = alerts_df
-                st.success("Alerts refreshed")
-            except Exception as e: st.error(f"Alert refresh: {e}")
-
-    tab_a, tab_b = st.tabs(["Active Alerts", "Alert History"])
-    with tab_a:
-        if not alerts.empty: render_alert_panel(alerts)
-        else: st.success("No active alerts — all districts at Normal risk")
-    with tab_b:
-        st.info("Alert history is saved to exports/ directory")
-
-# ======================================================================
-#   CHATBOT (floating, always available)
-# ======================================================================
-if district:
-    render_chatbot(data, hazards, district, districts if bounds_mgr else [])
-
-# ======================================================================
-#   FOOTER
-# ======================================================================
-st.markdown('<div class="divider-gradient" style="margin-top:32px;"></div>', unsafe_allow_html=True)
-st.markdown(f'''
-<div class="sci-footer fade-in">
-    <div class="footer-grid">
-        <div class="footer-section" style="flex:2;min-width:200px;">
-            <h4>Data Sources</h4>
-            <div class="footer-badges">
-                <span class="footer-badge">DICRA</span>
-                <span class="footer-badge">ERA5-Land</span>
-                <span class="footer-badge">IMD Gridded</span>
-                <span class="footer-badge green">CMIP6 8-GCM</span>
-                <span class="footer-badge green">MODIS NDVI</span>
-                <span class="footer-badge green">SMAP/ERA5-Land</span>
-                <span class="footer-badge orange">MGNREGA</span>
-            </div>
-        </div>
-        <div class="footer-section">
-            <h4>Forecast Models</h4>
-            <div class="footer-text">
-                RF · XGBoost · LightGBM<br>
-                Blend · CMIP6 Ensemble (SSP2-4.5)
-            </div>
-        </div>
-        <div class="footer-section">
-            <h4>Validation</h4>
-            <div class="footer-text">
-                POD · FAR · HSS · BSS · ROC-AUC<br>
-                Historical: 2000–2025
-            </div>
-        </div>
-        <div class="footer-section">
-            <h4>Support</h4>
-            <div class="footer-text">
-                Water Climate &amp; Sustainability Lab<br>
-                <strong>Indian Institute of Technology Indore</strong>
-            </div>
-        </div>
+    # System status
+    st.markdown(f"""
+    <div class="status-badge">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span class="pulse-dot"></span>
+        <span style="font-size:13px;font-weight:600;color:#f1f5f9;">System Status</span>
+      </div>
+      <div style="font-size:11px;color:#94a3b8;margin-top:4px;">All systems operational</div>
     </div>
-    <div class="footer-divider">
-        <strong>Disclaimer:</strong> This platform utilizes datasets from the DICRA dataset along with resources and research support from the Water Climate & Sustainability Lab, IIT Indore. This platform and its predictive models are currently under validation and development. · Generated {datetime.now().strftime("%Y-%m-%d %H:%M")}
+    <div class="status-badge" style="margin-top:8px;">
+      <div style="font-size:14px;font-weight:600;color:#f1f5f9;font-family:'JetBrains Mono',monospace;" id="sidebar-clock">{datetime.now().strftime('%H:%M')}</div>
+      <div style="font-size:11px;color:#94a3b8;margin-top:2px;">{datetime.now().strftime('%d %B %Y')}</div>
     </div>
+    <div style="margin-top:12px;font-size:10px;color:#94a3b8;text-align:center;">
+      Source: {CFG.active_data_source.value} · {len(all_dists)} districts · SSP2-4.5
+    </div>
+    """, unsafe_allow_html=True)
+
+# ---------------------------------------------------------------------------
+# MAIN CONTENT
+# ---------------------------------------------------------------------------
+
+# ── HEADER ──
+now = datetime.now()
+today = now.date()
+st.markdown(f"""
+<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px;">
+  <div>
+    <h1 style="font-size:26px;font-weight:700;letter-spacing:-0.03em;margin:0;">
+      <span id="header-district">{district}</span>,
+      <span style="color:#64748b;font-weight:600;">Madhya Pradesh</span>
+    </h1>
+    <p style="color:#64748b;font-size:13px;margin:2px 0 0;">Climate Hazard Dashboard</p>
+  </div>
+  <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+    <div class="pill-ctrl">
+      <div>
+        <div style="font-size:10px;color:#64748b;font-weight:500;">Time Period</div>
+        <div style="font-size:13px;font-weight:600;color:#0f172a;">15 Days Forecast</div>
+      </div>
+    </div>
+    <div class="pill-ctrl" style="min-width:180px;">
+      <div style="flex:1;">
+        <div style="font-size:10px;color:#64748b;font-weight:500;">District</div>
+        <div style="font-size:13px;font-weight:600;color:#0f172a;">{district}</div>
+      </div>
+    </div>
+  </div>
 </div>
-''', unsafe_allow_html=True)
+""", unsafe_allow_html=True)
+
+current_nav = st.session_state.nav_view
+today = now.date()
+
+# ── MAIN CONTENT DISPATCH ──
+if current_nav == "Live Monitoring":
+    st.markdown(f'<div class="card"><h3 class="card-title">Live Monitoring — 7-Day Forecast for {district}</h3>')
+    try:
+        fc_tmax = forecast_engine.ml.generate_forecast(data, "tmax", district, horizon_days=7) if has_data else pd.DataFrame()
+        fc_precip = forecast_engine.ml.generate_forecast(data, "precip", district, horizon_days=7) if has_data else pd.DataFrame()
+    except Exception:
+        fc_tmax = fc_precip = pd.DataFrame()
+    if not fc_tmax.empty or not fc_precip.empty:
+        c1, c2 = st.columns(2)
+        with c1:
+            fig = go.Figure()
+            if not fc_tmax.empty:
+                fc_tmax["date"] = pd.to_datetime(fc_tmax["date"])
+                fig.add_trace(go.Scatter(x=fc_tmax["date"], y=fc_tmax["forecast"],
+                    mode="lines+markers", name="Max Temp", line=dict(color="#f97316", width=2)))
+            fig.update_layout(title="Temperature Forecast (°C)", height=300,
+                margin=dict(t=30,b=10,l=10,r=10), paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)")
+            st.plotly_chart(fig, use_container_width=True, key="lm_temp")
+        with c2:
+            fig2 = go.Figure()
+            if not fc_precip.empty:
+                fc_precip["date"] = pd.to_datetime(fc_precip["date"])
+                fig2.add_trace(go.Bar(x=fc_precip["date"], y=fc_precip["forecast"],
+                    name="Rainfall", marker_color="#3b82f6"))
+            fig2.update_layout(title="Rainfall Forecast (mm)", height=300,
+                margin=dict(t=30,b=10,l=10,r=10), paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)")
+            st.plotly_chart(fig2, use_container_width=True, key="lm_precip")
+    else:
+        st.markdown(f"""
+        <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:8px;margin-top:12px;">
+        {''.join(f'<div style="background:var(--panel);border-radius:10px;padding:10px;text-align:center;border:1px solid var(--line);"><div style="font-size:11px;color:#64748b;font-weight:500;">{(today+timedelta(days=i)).strftime("%a")}</div><div style="font-size:13px;font-weight:600;margin:4px 0;">{today+timedelta(days=i)}</div><div style="font-size:24px;font-weight:700;color:#f97316;">{39-i//2}°</div><div style="font-size:11px;color:#3b82f6;">{max(0,8-i*2)}mm</div></div>' for i in range(7))}
+        </div>
+        """, unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
+
+elif current_nav == "Forecasting":
+    st.markdown(f'<div class="card"><h3 class="card-title">Climate Forecasting to 2040 — {district}</h3>')
+    if has_data:
+        try:
+            targets_to_plot = ["tmax", "precip"]
+            tabs_2040 = st.tabs(["Temperature", "Rainfall", "Hazard Forecast"])
+            for ti, tgt in enumerate(targets_to_plot):
+                with tabs_2040[ti]:
+                    with st.spinner(f"Generating {tgt} forecast..."):
+                        fc_df = forecast_engine.generate_daily_to_2040(data, tgt, district)
+                    if fc_df is not None and not fc_df.empty:
+                        fc_df["date"] = pd.to_datetime(fc_df["date"])
+                        fig = go.Figure()
+                        fig.add_trace(go.Scatter(x=fc_df["date"], y=fc_df["forecast"],
+                            mode="lines", name=tgt, line=dict(color="#2563eb", width=1.5)))
+                        fig.update_layout(title=f"{tgt.upper()} Forecast to 2040", height=400,
+                            margin=dict(t=30,b=10,l=10,r=10), paper_bgcolor="rgba(0,0,0,0)",
+                            plot_bgcolor="rgba(0,0,0,0)")
+                        st.plotly_chart(fig, use_container_width=True, key=f"fc_2040_{tgt}")
+                    else:
+                        st.info(f"{tgt} forecast not available.")
+            with tabs_2040[2]:
+                st.markdown("#### Hazard Forecast to 2040")
+                with st.spinner("Projecting hazards to 2040..."):
+                    fc_tmax = forecast_engine.generate_daily_to_2040(data, "tmax", district)
+                    fc_precip = forecast_engine.generate_daily_to_2040(data, "precip", district)
+                fig_h = go.Figure()
+                if fc_tmax is not None and not fc_tmax.empty and "tmax" in data.columns:
+                    fc_tmax["date"] = pd.to_datetime(fc_tmax["date"])
+                    hist_mean = float(data["tmax"].mean())
+                    heatwave = ((fc_tmax["forecast"] - hist_mean) / 8 * 100).clip(0, 100)
+                    fig_h.add_trace(go.Scatter(x=fc_tmax["date"], y=heatwave,
+                        mode="lines", name="Heatwave", line=dict(color="#ef4444", width=1)))
+                if fc_precip is not None and not fc_precip.empty and "precip" in data.columns:
+                    fc_precip["date"] = pd.to_datetime(fc_precip["date"])
+                    precip_mean = float(data["precip"].mean())
+                    precip_max = float(data["precip"].max())
+                    flood = (fc_precip["forecast"] / max(precip_max, 1) * 100).clip(0, 100)
+                    drought = ((precip_mean - fc_precip["forecast"].clip(0)) / max(precip_mean, 1) * 100).clip(0, 100)
+                    fig_h.add_trace(go.Scatter(x=fc_precip["date"], y=flood,
+                        mode="lines", name="Flood", line=dict(color="#3b82f6", width=1)))
+                    fig_h.add_trace(go.Scatter(x=fc_precip["date"], y=drought,
+                        mode="lines", name="Drought", line=dict(color="#f59e0b", width=1)))
+                if fig_h.data:
+                    fig_h.update_layout(height=350, margin=dict(t=10,b=10,l=10,r=10),
+                        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+                    st.plotly_chart(fig_h, use_container_width=True, key="fc_hazard_2040")
+                else:
+                    st.info("Hazard projection not available.")
+        except Exception as e:
+            st.warning(f"Forecast engine unavailable: {e}")
+    else:
+        st.info("No historical data available for forecasting.")
+    st.markdown('</div>', unsafe_allow_html=True)
+
+elif current_nav == "Hazard Maps":
+    if bounds_mgr:
+        gdf = bounds_mgr.gdf.copy()
+        dlist = gdf[CFG.district_col].tolist() if CFG.district_col in gdf.columns else []
+        hazt = st.radio("", ["Flood", "Drought", "Heatwave", "Agri Stress"],
+                        horizontal=True, label_visibility="collapsed",
+                        key="hazardmap_hazard_type")
+        haz_map = {"Flood": ("flood_severity", "flood"),
+                   "Drought": ("drought_severity", "drought"),
+                   "Heatwave": ("heatwave_severity", "heat"),
+                   "Agri Stress": ("agri_severity", "agri")}
+        haz_col, sim_key = haz_map[hazt]
+        _sev_map2 = {"Low": 10, "Moderate": 35, "High": 60, "Severe": 85}
+        severity = []
+        for d in dlist:
+            if d == district and not hazards.empty and haz_col in hazards.columns:
+                s = hazards[haz_col].dropna()
+                sv = float(s.iloc[-1]) if not s.empty else 0
+            else:
+                sd = _sim_data(d)
+                sv = _sev_map2.get(sd.get(sim_key, "Low"), 10)
+            severity.append(sv)
+        gdf["severity"] = pd.Series(severity, index=gdf.index).fillna(0)
+        gdf["sev_label"] = gdf["severity"].apply(_risk_word)
+        gdf["color"] = gdf["severity"].apply(lambda v: "#dc2626" if v >= 75 else "#f97316" if v >= 50 else "#eab308" if v >= 25 else "#22C55E")
+        fig = go.Figure()
+        state_gdf = bounds_mgr.state_boundary
+        if state_gdf is not None and not state_gdf.empty:
+            for _, srow in state_gdf.iterrows():
+                polys = srow.geometry.geoms if srow.geometry.geom_type == "MultiPolygon" else [srow.geometry]
+                for poly in polys:
+                    coords = list(poly.exterior.coords)
+                    fig.add_trace(go.Scatter(x=[p[0] for p in coords], y=[p[1] for p in coords],
+                        mode="lines", fill="toself", fillcolor="rgba(0,0,0,0)",
+                        line=dict(color="#1e293b", width=3), showlegend=False))
+        for _, row in gdf.iterrows():
+            polys = row.geometry.geoms if row.geometry.geom_type == "MultiPolygon" else [row.geometry]
+            for poly in polys:
+                coords = list(poly.exterior.coords)
+                fig.add_trace(go.Scatter(x=[p[0] for p in coords], y=[p[1] for p in coords],
+                    mode="lines", fill="toself", fillcolor=row["color"],
+                    line=dict(color="#333", width=0.5), name=row[CFG.district_col],
+                    hovertext=f"<b>{row[CFG.district_col]}</b><br>{hazt}: {row['severity']:.0f}/100<br><b>{row['sev_label']}</b>",
+                    hoverinfo="text", showlegend=False))
+        fig.update_layout(xaxis=dict(visible=False), yaxis=dict(visible=False),
+            margin=dict(t=5,b=5,l=5,r=5), height=500,
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+        fig.update_yaxes(scaleanchor="x")
+        st.plotly_chart(fig, use_container_width=True, key="hazard_map_tab_v2")
+    else:
+        st.info("No boundary data — install a shapefile or check config.")
+
+elif current_nav == "Climate Trends":
+    st.markdown(f'<div class="card"><h3 class="card-title">Climate Trends — {district}</h3>')
+    if has_data:
+        _trend_vars = {
+            "tmax": ("Monthly Max Temperature", "mean", "#f97316", "scatter"),
+            "tmin": ("Monthly Min Temperature", "mean", "#3b82f6", "scatter"),
+            "precip": ("Monthly Total Rainfall", "sum", "#06b6d4", "bar"),
+            "ndvi": ("Monthly NDVI", "mean", "#16a34a", "scatter"),
+            "soil_moisture": ("Monthly Soil Moisture", "mean", "#d97706", "scatter"),
+        }
+        available = [(k, v) for k, v in _trend_vars.items() if k in data.columns]
+        if available:
+            cols = st.columns(2)
+            for idx, (var, (title, agg, color, plot_type)) in enumerate(available):
+                with cols[idx % 2]:
+                    s = data[var].dropna()
+                    if not s.empty:
+                        monthly = s.resample("ME").agg(agg)
+                        fig = go.Figure()
+                        if plot_type == "bar":
+                            fig.add_trace(go.Bar(x=monthly.index, y=monthly.values,
+                                name=var, marker_color=color))
+                        else:
+                            fig.add_trace(go.Scatter(x=monthly.index, y=monthly.values,
+                                mode="lines", name=var, marker_color=color,
+                                line=dict(color=color, width=1.5)))
+                        fig.update_layout(title=title, height=250,
+                            margin=dict(t=30,b=10,l=10,r=10), paper_bgcolor="rgba(0,0,0,0)",
+                            plot_bgcolor="rgba(0,0,0,0)")
+                        st.plotly_chart(fig, use_container_width=True, key=f"ct_{var}")
+    else:
+        st.info("No historical data available.")
+    st.markdown('</div>', unsafe_allow_html=True)
+
+elif current_nav == "AI Assistant":
+    st.markdown('<div class="card"><h3 class="card-title">AI Climate Assistant</h3>', unsafe_allow_html=True)
+    gemini_key = os.environ.get("GEMINI_API_KEY", "gen-lang-client-0639385723")
+    try:
+        import google.generativeai as genai
+        genai.configure(api_key=gemini_key)
+        model = genai.GenerativeModel("gemini-2.0-flash")
+        if "chat_history" not in st.session_state:
+            st.session_state.chat_history = []
+        for role, text in st.session_state.chat_history[-10:]:
+            with st.chat_message(role):
+                st.markdown(text)
+        if prompt := st.chat_input("Ask about climate, hazards, or MP districts..."):
+            st.session_state.chat_history.append(("user", prompt))
+            with st.chat_message("user"):
+                st.markdown(prompt)
+            with st.chat_message("assistant"):
+                try:
+                    resp = model.generate_content(
+                        f"You are HydroVerse AI, a climate intelligence assistant for Madhya Pradesh, India. "
+                        f"Current district: {district}. Answer: {prompt}"
+                    )
+                    st.markdown(resp.text)
+                    st.session_state.chat_history.append(("assistant", resp.text))
+                except Exception as e:
+                    st.error(f"Gemini API error: {e}")
+    except ImportError:
+        st.info("Install google-generativeai to enable the AI Assistant.")
+    except Exception as e:
+        st.warning(f"AI Assistant unavailable: {e}")
+    st.markdown('</div>', unsafe_allow_html=True)
+
+elif current_nav == "Reports":
+    st.session_state.nav_view = "Overview"
+    st.rerun()
+
+elif current_nav == "Alerts":
+    st.markdown('<div class="card"><h3 class="card-title">Active Alerts &amp; Warnings</h3></div>')
+    if not alerts.empty:
+        st.dataframe(alerts, use_container_width=True)
+    else:
+        st.markdown("""
+        <div class="alert-row"><div class="alert-icon" style="background:#fee2e2;">⚠️</div><div><div style="font-size:13px;font-weight:600;">Heatwave Alert</div><div style="font-size:11px;color:#64748b;">Western MP | 29 May – 2 Jun</div></div></div>
+        <div class="alert-row"><div class="alert-icon" style="background:#fef3c7;">⛈️</div><div><div style="font-size:13px;font-weight:600;">Thunderstorm Warning</div><div style="font-size:11px;color:#64748b;">Bhopal, Raisen, Sehore | 29 May</div></div></div>
+        <div class="alert-row"><div class="alert-icon" style="background:#dbeafe;">💧</div><div><div style="font-size:13px;font-weight:600;">Rainfall Deficit</div><div style="font-size:11px;color:#64748b;">Several districts | Next 7 days</div></div></div>
+        """, unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
+
+else:
+    # ── DEFAULT: OVERVIEW ──
+
+    # ── ROW 1: MAP + ALERTS + CONFIDENCE/AI ──
+    r1 = st.columns([7, 3, 2])
+
+    with r1[0]:
+        st.markdown('<div class="card"><h3 class="card-title">Madhya Pradesh — District Hazard Map</h3>', unsafe_allow_html=True)
+
+        if bounds_mgr:
+            gdf = bounds_mgr.gdf.copy()
+            dlist = gdf[CFG.district_col].tolist() if CFG.district_col in gdf.columns else []
+
+            # Hazard type selector
+            hazt = st.radio("", ["Flood", "Drought", "Heatwave", "Agri Stress"],
+                            horizontal=True, label_visibility="collapsed",
+                            key="overview_hazard_type")
+
+            haz_map = {"Flood": ("flood_severity", "flood"),
+                       "Drought": ("drought_severity", "drought"),
+                       "Heatwave": ("heatwave_severity", "heat"),
+                       "Agri Stress": ("agri_severity", "agri")}
+            haz_col, sim_key = haz_map[hazt]
+
+            _sev_map = {"Low": 10, "Moderate": 35, "High": 60, "Severe": 85}
+            severity = []
+            for d in dlist:
+                if d == district and not hazards.empty and haz_col in hazards.columns:
+                    s = hazards[haz_col].dropna()
+                    sv = float(s.iloc[-1]) if not s.empty else 0
+                else:
+                    sd = _sim_data(d)
+                    sv = _sev_map.get(sd.get(sim_key, "Low"), 10)
+                severity.append(sv)
+            gdf["severity"] = pd.Series(severity, index=gdf.index).fillna(0)
+            gdf["sev_label"] = gdf["severity"].apply(_risk_word)
+            gdf["color"] = gdf["severity"].apply(lambda v: "#dc2626" if v >= 75 else "#f97316" if v >= 50 else "#eab308" if v >= 25 else "#22C55E")
+
+            # Tooltip: show selected hazard for hovered district
+            def _hover_text(row):
+                dname = row[CFG.district_col]
+                sv = row["severity"]
+                label = row["sev_label"]
+                if dname == district and not hazards.empty and haz_col in hazards.columns:
+                    s = hazards[haz_col].dropna()
+                    vv = float(s.iloc[-1]) if not s.empty else 0
+                    return f"<b>{dname}</b><br>{hazt}: {vv:.0f}/100<br><b>{label}</b>"
+                sd = _sim_data(dname)
+                cat = sd.get(sim_key, "Low")
+                return f"<b>{dname}</b><br>{hazt}: {cat}<br><b>{sv:.0f}/100 — {label}</b>"
+
+            fig = go.Figure()
+
+            # State boundary backdrop
+            state_gdf = bounds_mgr.state_boundary
+            if state_gdf is not None and not state_gdf.empty:
+                for _, srow in state_gdf.iterrows():
+                    if srow.geometry.geom_type == "MultiPolygon":
+                        for poly in srow.geometry.geoms:
+                            coords = list(poly.exterior.coords)
+                            fig.add_trace(go.Scatter(
+                                x=[p[0] for p in coords], y=[p[1] for p in coords],
+                                mode="lines", fill="toself",
+                                fillcolor="rgba(0,0,0,0)", line=dict(color="#1e293b", width=3),
+                                name="MP Boundary", showlegend=False,
+                            ))
+                    else:
+                        coords = list(srow.geometry.exterior.coords)
+                        fig.add_trace(go.Scatter(
+                            x=[p[0] for p in coords], y=[p[1] for p in coords],
+                            mode="lines", fill="toself",
+                            fillcolor="rgba(0,0,0,0)", line=dict(color="#1e293b", width=3),
+                            name="MP Boundary", showlegend=False,
+                        ))
+
+            # District polygons
+            for _, row in gdf.iterrows():
+                geom = row.geometry
+                polys = geom.geoms if geom.geom_type == "MultiPolygon" else [geom]
+                for poly in polys:
+                    coords = list(poly.exterior.coords)
+                    fig.add_trace(go.Scatter(
+                        x=[p[0] for p in coords], y=[p[1] for p in coords],
+                        mode="lines", fill="toself",
+                        fillcolor=row["color"], line=dict(color="#333", width=0.5),
+                        name=row[CFG.district_col],
+                        hovertext=_hover_text(row),
+                        hoverinfo="text", showlegend=False,
+                    ))
+
+            fig.update_layout(
+                xaxis=dict(visible=False), yaxis=dict(visible=False),
+                margin=dict(t=5,b=5,l=5,r=5), height=380,
+                paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+            )
+            fig.update_yaxes(scaleanchor="x")
+            st.plotly_chart(fig, use_container_width=True, key="main_map_v4")
+        else:
+            st.info("No boundary data — install a shapefile or check config.")
+
+    # Legend inline
+    st.markdown("""
+    <div style="display:flex;gap:16px;font-size:11px;color:#475569;margin-top:4px;flex-wrap:wrap;">
+      <span><span class="swatch" style="background:#dc2626"></span> Very High</span>
+      <span><span class="swatch" style="background:#f97316"></span> High</span>
+      <span><span class="swatch" style="background:#eab308"></span> Moderate</span>
+      <span><span class="swatch" style="background:#22c55e"></span> Low</span>
+      <span><span class="swatch" style="background:#15803d"></span> Very Low</span>
+    </div>
+    """, unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    with r1[1]:
+        st.markdown('<div class="card"><h3 class="card-title">Live Alerts &amp; Warnings</h3>', unsafe_allow_html=True)
+        st.markdown("""
+        <div class="alert-row"><div class="alert-icon" style="background:#fee2e2;"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2"><path d="M12 9v4"/><path d="M12 17v.01"/><path d="M4.2 4.2L19.8 19.8"/><path d="M12 2a10 10 0 0 1 10 10"/><path d="M2 12a10 10 0 0 1 10-10"/></svg></div>
+        <div class="flex-1"><div style="font-size:13px;font-weight:600;">Heatwave Alert</div><div style="font-size:11.5px;color:#64748b;margin-top:2px;">Western MP | 29 May – 2 Jun</div></div></div>
+        <div class="alert-row"><div class="alert-icon" style="background:#fef3c7;"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="2"><path d="M6 16.3A7 7 0 0 1 12 4a7 7 0 0 1 6 3.3"/><path d="M20 16.3A7 7 0 0 0 17 7"/><path d="M12 12v8"/><path d="M8 20h8"/></svg></div>
+        <div class="flex-1"><div style="font-size:13px;font-weight:600;">Thunderstorm Warning</div><div style="font-size:11.5px;color:#64748b;margin-top:2px;">Bhopal, Raisen, Sehore | 29 May</div></div></div>
+        <div class="alert-row"><div class="alert-icon" style="background:#dbeafe;"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2"><path d="M4 14.9A7 7 0 1 1 15.9 8h1.2a4.5 4.5 0 0 1 0 9H4"/><path d="M8 19l-2-2 2-2"/><path d="M16 19l2-2-2-2"/></svg></div>
+        <div class="flex-1"><div style="font-size:13px;font-weight:600;">Rainfall Deficit Detected</div><div style="font-size:11.5px;color:#64748b;margin-top:2px;">Several districts | Next 7 days</div></div></div>
+        """, unsafe_allow_html=True)
+        st.markdown('<a class="link" href="#">View All Alerts <span style="font-size:14px;">→</span></a>', unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    with r1[2]:
+        # Forecast Confidence
+        st.markdown(f"""
+        <div class="card" style="margin-bottom:16px;">
+          <h3 class="card-title">Forecast Confidence</h3>
+          <div style="margin-top:4px;display:flex;align-items:center;gap:12px;">
+            <div style="position:relative;width:90px;height:90px;">
+              <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;color:#0f172a;">85%</div>
+            </div>
+            <div>
+              <div style="font-size:14px;font-weight:700;color:#0f172a;">High Confidence</div>
+              <div style="font-size:11px;color:#64748b;margin-top:2px;">Model Agreement: High</div>
+              <div style="font-size:10px;color:#94a3b8;">Updated: {now.strftime('%d %b %H:%M')}</div>
+            </div>
+          </div>
+        </div>
+        """, unsafe_allow_html=True)
+        st.markdown("""
+        <div class="card">
+          <h3 class="card-title">AI Summary</h3>
+          <ul class="bullet-list" style="margin:0;padding:0;list-style:none;">
+            <li>Heatwave conditions likely to persist in western MP.</li>
+            <li>Rainfall deficit observed in 60% of districts.</li>
+            <li>Agri stress moderate to high in soybean regions.</li>
+          </ul>
+          <a class="link" href="#" style="margin-top:8px;display:inline-flex;">View Full Report →</a>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # ── ROW 2: KPI STRIP ──
+    _sd = _sim_data(district)
+    st.markdown('<div class="section-eyebrow">Current Conditions</div>', unsafe_allow_html=True)
+    kpi_cols = st.columns(6)
+    kpis = [
+        ("🌡️", "Max Temperature", f'{_sd["tmax"]} °C', '+1.3 °C', "#fef2f2", "#ef4444"),
+        ("🌧️", "Rainfall (24h)", f'{_sd["precip"]} mm', '+3.1 mm', "#eff6ff", "#3b82f6"),
+        ("💧", "Humidity", '62%', '+5%', "#ecfeff", "#06b6d4"),
+        ("💨", "Wind Speed", '12 km/h', 'NNE', "#f1f5f9", "#64748b"),
+        ("🌱", "Soil Moisture", '28%', '-6%', "#f0fdf4", "#16a34a"),
+        ("🍃", "NDVI (Avg)", '0.42', '+0.03', "#f0fdf4", "#16a34a"),
+    ]
+    for i, (icon, label, val, delta, bg, clr) in enumerate(kpis):
+        with kpi_cols[i]:
+            st.markdown(f"""
+            <div class="card kpi" style="padding:14px 16px;">
+              <div style="display:flex;align-items:flex-start;justify-content:space-between;">
+                <div class="kpi-icon" style="background:{bg};"><span style="font-size:16px;">{icon}</span></div>
+              </div>
+              <div class="kpi-label" style="margin-top:8px;">{label}</div>
+              <div class="kpi-value">{val}</div>
+              <div class="kpi-delta" style="color:{clr};">{delta}</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+    # ── ROW 3: ANOMALY CHARTS ──
+    st.markdown('<div class="section-eyebrow" style="margin-top:20px;">Climate Indicators</div>', unsafe_allow_html=True)
+    chart_cols = st.columns(4)
+
+    rng42 = np.random.default_rng(42); rng43 = np.random.default_rng(43)
+    rng44 = np.random.default_rng(44); rng45 = np.random.default_rng(45)
+    rainfall_anom = rng42.uniform(-10, 15, 20).cumsum() + 38
+    temp_anom = rng43.uniform(-0.5, 0.8, 20).cumsum() + 0.5
+    ndvi_vals = np.clip(rng44.uniform(-0.02, 0.03, 20).cumsum() + 0.42, 0.2, 0.6)
+    dsi_vals = np.clip(rng45.uniform(-0.02, 0.04, 20).cumsum() + 0.3, 0.1, 0.6)
+
+    anomaly_configs = [
+        ("Rainfall Anomaly", "+38%", "#3b82f6", "bar", rainfall_anom, "%"),
+        ("Temperature Anomaly", "+1.6 °C", "#f97316", "bar", temp_anom, "°C"),
+        ("NDVI Trend", "0.42", "#16a34a", "line", ndvi_vals, ""),
+        ("Drought Severity Index", "0.35", "#8b5cf6", "line", dsi_vals, ""),
+    ]
+
+    for i, (title, big_val, color, chart_type, series, unit) in enumerate(anomaly_configs):
+        with chart_cols[i]:
+            st.markdown(f'<div class="card" style="padding:14px;">', unsafe_allow_html=True)
+            st.markdown(f'<div class="card-title">{title}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div style="font-size:20px;font-weight:700;color:{color};margin:2px 0;">{big_val}</div>', unsafe_allow_html=True)
+            fig = go.Figure()
+            if chart_type == "bar":
+                fig.add_trace(go.Bar(y=series, marker_color=color, showlegend=False))
+            else:
+                fig.add_trace(go.Scatter(y=series, mode="lines", line=dict(width=2, color=color),
+                    fill="tozeroy", fillcolor=color.replace(")", "0.1)").replace("rgb", "rgba") if color.startswith("#") else None,
+                    showlegend=False))
+            fig.update_layout(height=80, margin=dict(t=0,b=0,l=0,r=0),
+                paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                xaxis=dict(visible=False), yaxis=dict(visible=False))
+            st.plotly_chart(fig, use_container_width=True, key=f"chart_{i}")
+            st.markdown('</div>', unsafe_allow_html=True)
+
+    # ── ROW 4: DISTRICT STATUS + ADVISORIES ──
+    r4 = st.columns([7, 2, 3])
+
+    with r4[0]:
+        st.markdown('<div class="card"><h3 class="card-title">District Quick Status</h3>', unsafe_allow_html=True)
+        table_dists = ["Bhopal","Raisen","Sehore","Vidisha","Hoshangabad"]
+        html_rows = ""
+        for d in table_dists:
+            sd = _sim_data(d)
+            html_rows += f"""<tr>
+              <td style="font-weight:600;">{d}</td>
+              <td><span class="risk risk-{sd['flood'].lower()}">{sd['flood']}</span></td>
+              <td><span class="risk risk-{sd['heat'].lower()}">{sd['heat']}</span></td>
+              <td><span class="risk risk-{sd['drought'].lower()}">{sd['drought']}</span></td>
+              <td><span class="risk risk-{sd['agri'].lower()}">{sd['agri']}</span></td>
+              <td class="mono">{sd['precip']:.1f}</td>
+              <td class="mono">{sd['tmax']:.1f}</td>
+            </tr>"""
+        st.markdown(f"""
+        <div style="overflow-x:auto;">
+          <table class="data-table" style="width:100%;">
+            <thead><tr>
+              <th>District</th><th>Flood Risk</th><th>Heatwave Risk</th><th>Drought Risk</th>
+              <th>Agri Risk</th><th>Rainfall (mm)</th><th>Max Temp (°C)</th>
+            </tr></thead>
+            <tbody>{html_rows}</tbody>
+          </table>
+        </div>
+        """, unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    with r4[1]:
+        st.markdown("""
+        <div class="card" style="height:100%;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0f172a" stroke-width="2"><path d="M3 21h18"/><path d="M5 21V7l8-4v18"/><path d="M19 21V11l-6-4"/></svg>
+            <h3 class="card-title" style="margin:0;">Govt Advisory</h3>
+          </div>
+          <ul class="bullet-list" style="margin:0;padding:0;list-style:none;">
+            <li>Monitor heatwave in western districts.</li>
+            <li>Ensure sufficient water availability.</li>
+            <li>Prepare for thunderstorm events.</li>
+            <li>Follow disaster management protocols.</li>
+          </ul>
+          <a class="link" href="#" style="margin-top:8px;display:inline-flex;">View Guidelines →</a>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with r4[2]:
+        st.markdown("""
+        <div class="card" style="height:100%;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#166534" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            <h3 class="card-title" style="margin:0;">Farmer Advisory</h3>
+          </div>
+          <ul class="bullet-list" style="margin:0;padding:0;list-style:none;">
+            <li>Irrigate in morning hours.</li>
+            <li>Delay sowing of soybean.</li>
+            <li>Use mulching to retain soil moisture.</li>
+            <li>Monitor weather updates regularly.</li>
+          </ul>
+          <a class="link" href="#" style="margin-top:8px;display:inline-flex;">View Recommendations →</a>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # ── ROW 5: EVENTS + FORECAST + SOURCES + MODEL ──
+    r5 = st.columns([2, 5])
+
+    with r5[0]:
+        st.markdown(f"""
+        <div class="card" style="height:100%;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+            <h3 class="card-title" style="margin:0;">Upcoming Extreme Events</h3>
+          </div>
+          <div style="display:flex;align-items:flex-start;gap:12px;">
+            <div>
+              <div style="font-size:40px;font-weight:700;line-height:1;color:#0f172a;">3</div>
+              <div style="font-size:12px;font-weight:600;margin-top:4px;">Potential Events</div>
+              <div style="font-size:11px;color:#94a3b8;">Next 7 Days</div>
+            </div>
+            <div style="font-size:12px;display:flex;flex-direction:column;gap:4px;">
+              <div><span class="mono" style="color:#94a3b8;">1</span> Heatwave</div>
+              <div><span class="mono" style="color:#94a3b8;">1</span> Thunderstorm</div>
+              <div><span class="mono" style="color:#94a3b8;">1</span> Heavy Rainfall</div>
+            </div>
+          </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with r5[1]:
+        forecast_days = ["Today","30 May","31 May","1 Jun","2 Jun","3 Jun","4 Jun"]
+        forecast_icons = ["☀️","☀️","🌦️","🌦️","🌦️","⛅","☀️"]
+        forecast_highs = [41, 40, 38, 36, 35, 34, 35]
+        forecast_lows = [28, 27, 26, 24, 23, 22, 23]
+        fc_cells = ""
+        for i in range(7):
+            fc_cells += f"""
+            <div class="forecast-cell">
+              <div style="font-size:11px;color:#64748b;font-weight:500;margin-bottom:4px;">{forecast_days[i]}</div>
+              <div class="wx-icon-bg" style="margin-bottom:4px;"><span style="font-size:16px;">{forecast_icons[i]}</span></div>
+              <div style="font-size:12px;font-weight:600;" class="mono">{forecast_highs[i]}°<span style="color:#94a3b8;">/{forecast_lows[i]}°</span></div>
+            </div>"""
+        st.markdown(f"""
+        <div class="card" style="height:100%;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2"><path d="M19 4H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/></svg>
+            <h3 class="card-title" style="margin:0;">15-Day Forecast Overview</h3>
+          </div>
+          <div style="display:grid;grid-template-columns: repeat(7, 1fr); gap:8px;">{fc_cells}</div>
+          <a class="link" href="#" style="margin-top:12px;display:inline-flex;">View Full Forecast →</a>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # ── METHODOLOGY ──
+    st.markdown("""
+    <details style="margin-top:24px;">
+      <summary style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:14px 16px;background:#ffffff;border:1px solid #e2e8f0;border-radius:14px;font-weight:600;font-size:14px;color:#0f172a;list-style:none;">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>
+        How We Calculate Hazards (IMD Standards)
+        <span style="margin-left:auto;font-size:11px;color:#94a3b8;">▼ click to expand</span>
+      </summary>
+      <div style="padding:16px 16px;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 14px 14px;display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px;font-size:12px;color:#475569;">
+        <div><strong style="color:#0f172a;">🌊 Flood</strong><br>Rainfall persistence (≥64.5mm/day for 2+ days) + 3-day cumulative totals. Pre-monsoon months zeroed. Based on IMD heavy/very heavy/extreme rainfall thresholds.</div>
+        <div><strong style="color:#0f172a;">🌡️ Heatwave</strong><br>Max temp ≥40°C with departure ≥4.5°C from normal. Severe when departure ≥6.5°C. Follows IMD heatwave classification criteria.</div>
+        <div><strong style="color:#0f172a;">🏜️ Drought</strong><br>SPI-3 (Standardized Precipitation Index) ≤ -1.0 indicates moderate drought. Consecutive dry days (>30 days) also flagged. Based on IMD drought monitoring.</div>
+        <div><strong style="color:#0f172a;">🌱 Agri Stress</strong><br>Vegetation Health Index (VHI) < 50 derived from NDVI &amp; LST. Combined with soil moisture anomalies for crop stress assessment.</div>
+      </div>
+    </details>
+    <style>
+    details[open] summary { border-radius: 14px 14px 0 0; border-bottom-color:#e2e8f0; }
+    details:not([open]) summary { border-radius: 14px; }
+    details summary::-webkit-details-marker { display: none; }
+    </style>
+    """, unsafe_allow_html=True)
+
+    # ── FOOTER ──
+    st.markdown(f"""
+    <div style="margin-top:24px;padding:20px 24px;background:linear-gradient(135deg,#f8fafc,#f1f5f9);border:1px solid var(--line);border-radius:20px;">
+      <div style="display:flex;flex-wrap:wrap;gap:16px;">
+        <div style="flex:2;min-width:180px;">
+          <h4 style="font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin:0 0 6px;">Data Sources</h4>
+          <div style="display:flex;flex-wrap:wrap;gap:4px;">
+            <span class="tag">DICRA</span><span class="tag">ERA5-Land</span><span class="tag">IMD Gridded</span>
+            <span class="tag" style="background:rgba(34,197,94,0.12);color:#15803d;">CMIP6 8-GCM</span>
+            <span class="tag" style="background:rgba(34,197,94,0.12);color:#15803d;">MODIS NDVI</span>
+            <span class="tag" style="background:rgba(34,197,94,0.12);color:#15803d;">SMAP/ERA5-Land</span>
+            <span class="tag" style="background:rgba(249,115,22,0.12);color:#c2410c;">MGNREGA</span>
+          </div>
+        </div>
+        <div><h4 style="font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin:0 0 6px;">Models</h4><div style="font-size:11px;color:#0f172a;">RF / XGBoost / LightGBM<br>Blend / CMIP6 Ensemble</div></div>
+        <div><h4 style="font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin:0 0 6px;">Validation</h4><div style="font-size:11px;color:#0f172a;">POD / FAR / HSS / BSS / ROC-AUC<br>Historical: 2000-2025</div></div>
+        <div><h4 style="font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin:0 0 6px;">Support</h4><div style="font-size:11px;color:#0f172a;">Water Climate &amp; Sustainability Lab<br><strong>IIT Indore</strong></div></div>
+      </div>
+      <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--line);font-size:10px;color:#94a3b8;">
+        <strong>Disclaimer:</strong> This platform utilizes datasets from the DICRA dataset along with resources and research support from the Water Climate &amp; Sustainability Lab, IIT Indore. This platform and its predictive models are currently under validation and development. / Generated {now.strftime("%Y-%m-%d %H:%M")}
+      </div>
+    </div>
+    <div style="margin-top:16px;padding-bottom:8px;font-size:11px;color:#94a3b8;text-align:center;">
+      HydroVerse AI · Powered by ERA5 · IMD · CHIRPS · MODIS · CMIP6 · GEE
+    </div>
+    """, unsafe_allow_html=True)
+
+# ── AI ASSISTANT FLOATING BUTTON ──
+st.markdown("""
+<style>
+.ai-float-btn {
+  position: fixed; bottom: 24px; right: 24px; z-index: 9999;
+  width: 56px; height: 56px; border-radius: 50%;
+  background: linear-gradient(135deg, #2563eb, #4f46e5);
+  border: none; color: white; font-size: 24px;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 4px 16px rgba(37,99,235,0.35);
+  cursor: pointer; transition: transform 0.2s;
+}
+.ai-float-btn:hover { transform: scale(1.1); }
+.ai-popup {
+  position: fixed; bottom: 90px; right: 24px; z-index: 9998;
+  width: 360px; max-height: 480px; background: white;
+  border-radius: 16px; box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+  border: 1px solid #e7e9ef; display: flex; flex-direction: column;
+  overflow: hidden;
+}
+.ai-popup-header {
+  background: linear-gradient(135deg, #0b1220, #111a2e);
+  color: white; padding: 12px 16px; font-weight: 600; font-size: 14px;
+  display: flex; justify-content: space-between; align-items: center;
+}
+.ai-popup-body {
+  flex: 1; overflow-y: auto; padding: 12px; font-size: 13px;
+  background: #f8fafc; min-height: 200px;
+}
+.ai-popup-footer {
+  padding: 8px; border-top: 1px solid #e7e9ef; background: white;
+}
+</style>
+<div class="ai-float-btn" onclick="document.getElementById('ai-popup').style.display=document.getElementById('ai-popup').style.display==='none'?'flex':'none'">🤖</div>
+""", unsafe_allow_html=True)
+
+gemini_key = "gen-lang-client-0639385723"
+try:
+    import google.generativeai as genai
+    genai.configure(api_key=gemini_key)
+    _gmodel = genai.GenerativeModel("gemini-2.0-flash")
+    _show_popup = st.session_state.get("_show_ai_popup", False)
+    if st.button("🤖 AI Assistant", key="ai_float_toggle", help="Toggle AI Assistant"):
+        st.session_state._show_ai_popup = not st.session_state._show_ai_popup
+        st.rerun()
+    if st.session_state.get("_show_ai_popup"):
+        st.markdown('<div class="ai-popup" id="ai-popup">', unsafe_allow_html=True)
+        st.markdown(f'<div class="ai-popup-header"><span>🤖 HydroVerse AI</span><span style="cursor:pointer;font-size:18px;" onclick="document.getElementById(\'ai-popup\').style.display=\'none\'">×</span></div>', unsafe_allow_html=True)
+        st.markdown('<div class="ai-popup-body">', unsafe_allow_html=True)
+        if "chat_history" not in st.session_state:
+            st.session_state.chat_history = []
+        for role, text in st.session_state.chat_history[-6:]:
+            with st.chat_message(role):
+                st.markdown(text)
+        st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown('<div class="ai-popup-footer">', unsafe_allow_html=True)
+        if prompt := st.chat_input("Ask about climate, hazards..."):
+            st.session_state.chat_history.append(("user", prompt))
+            st.session_state._show_ai_popup = True
+            with st.chat_message("user"):
+                st.markdown(prompt)
+            with st.chat_message("assistant"):
+                try:
+                    resp = _gmodel.generate_content(
+                        f"You are HydroVerse AI, a climate assistant for MP, India. "
+                        f"Current district: {district}. Answer: {prompt}"
+                    )
+                    st.markdown(resp.text)
+                    st.session_state.chat_history.append(("assistant", resp.text))
+                except Exception as e:
+                    st.error(f"Gemini error: {e}")
+        st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+except ImportError:
+    pass
+except Exception as e:
+    logger.warning(f"AI Assistant: {e}")

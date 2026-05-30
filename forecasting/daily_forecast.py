@@ -19,6 +19,9 @@ class DailyForecastEngine:
     def set_ensemble(self, df: pd.DataFrame):
         self.cmip6.set_ensemble(df)
 
+    def set_ensemble(self, df: pd.DataFrame):
+        self.cmip6.set_ensemble(df)
+
     def generate_daily_to_2040(
         self,
         panel: pd.DataFrame,

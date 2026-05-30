@@ -14,38 +14,60 @@ def render_sidebar(
     on_mode_change: Optional[Callable] = None,
 ):
     with st.sidebar:
+        # ── Brand Header ──
+        try:
+            with open(r'D:\cri\IITI_Logo.svg', 'r', encoding='utf-8') as _f:
+                _svg = _f.read()
+            import base64
+            _b64 = base64.b64encode(_svg.encode('utf-8')).decode()
+            _logo_html = f'<img src="data:image/svg+xml;base64,{_b64}" style="height:48px;width:auto;">'
+        except Exception:
+            _logo_html = ''
         st.markdown(f'''
-        <div class="sidebar-logo">
-            <span class="logo-icon">{APP_ICON}</span>
-            <div class="logo-title">{APP_NAME}</div>
-            <p class="logo-subtitle">{APP_SUBTITLE}</p>
+        <div style="text-align:center;padding:6px 0 12px;">
+            <div style="display:flex;align-items:center;justify-content:center;gap:12px;">
+                {_logo_html}
+                <div style="text-align:left;">
+                    <div style="font-size:1.6rem;font-weight:800;color:var(--primary);letter-spacing:-0.03em;line-height:1.1;">HydroVerse AI</div>
+                    <div style="font-size:0.72rem;color:var(--text-muted);font-weight:500;margin-top:2px;">Water, Climate &amp; Sustainability Lab<br>Indian Institute of Technology Indore</div>
+                </div>
+            </div>
         </div>
         ''', unsafe_allow_html=True)
 
-        st.markdown("---")
+        st.markdown("<hr>", unsafe_allow_html=True)
 
-        # Navigation
-        nav_items = [
-            ("📊", "Overview", "tab-0"),
-            ("🛰️", "Real-Time Monitor", "tab-1"),
-            ("📜", "Historical Analysis", "tab-2"),
-            ("🗺️", "Hazard Maps", "tab-3"),
-            ("🔮", "Forecasting", "tab-4"),
-            ("✅", "Validation", "tab-5"),
-            ("🔔", "Alerts", "tab-6"),
-        ]
+        # ── Navigation ──
+        st.markdown("#### 🧭 View")
+        nav = st.radio(
+            "Navigation",
+            ["📊 Dashboard", "📈 Historical Analysis", "🔮 Forecast", "🤖 AI Assistant"],
+            index=0,
+            label_visibility="collapsed",
+            key="nav_view",
+            horizontal=False,
+        )
 
-        active_tab = st.session_state.get("nav_tab", 0)
-        for i, (icon, label, _) in enumerate(nav_items):
-            cls = "sidebar-nav-item active" if i == active_tab else "sidebar-nav-item"
-            if st.button(f"{icon} {label}", key=f"nav_{i}", help=f"Go to {label}",
-                         use_container_width=True, type="secondary" if i != active_tab else "primary"):
-                st.session_state.nav_tab = i
-                st.rerun()
+        st.markdown("<hr>", unsafe_allow_html=True)
 
-        st.markdown("---")
+        # ── District ──
+        st.markdown("#### 📍 District")
+        if districts:
+            default_idx = districts.index("Bhopal") if "Bhopal" in districts else 0
+            district = st.selectbox(
+                "Select District",
+                options=districts,
+                index=default_idx,
+                label_visibility="collapsed",
+                key="district",
+            )
+        else:
+            district = None
+            st.warning("No districts loaded")
 
-        # Data Source
+        st.markdown("<hr>", unsafe_allow_html=True)
+
+        # ── Data Source ──
         st.markdown("#### 🎯 Data Source")
         source = st.selectbox(
             "Select Source",
@@ -56,41 +78,27 @@ def render_sidebar(
         )
         if source == DataSource.ERA5.value:
             CFG.active_data_source = DataSource.ERA5
-            st.markdown('<span style="font-size:0.65rem;color:var(--primary-dark);">🔵 ERA5-Land (Reanalysis)</span>', unsafe_allow_html=True)
         elif source == DataSource.IMD.value:
             CFG.active_data_source = DataSource.IMD
-            st.markdown('<span style="font-size:0.65rem;color:#C2410C;">🟠 IMD Gridded (Observed)</span>', unsafe_allow_html=True)
         else:
             CFG.active_data_source = DataSource.AUTO
-            st.markdown('<span style="font-size:0.65rem;color:#7C3AED;">🟣 Auto-detect best source</span>', unsafe_allow_html=True)
 
         if on_source_change:
             on_source_change(source)
 
-        # District
-        st.markdown("#### 📍 District")
-        if districts:
-            district = st.selectbox(
-                "Select District",
-                options=districts,
-                index=0,
-                label_visibility="collapsed",
-                key="district",
-            )
-        else:
-            district = None
-            st.warning("No districts loaded")
+        st.markdown("<hr>", unsafe_allow_html=True)
 
-        st.markdown("---")
-
-        # Time Period
+        # ── Time Period ──
         st.markdown("#### ⏱️ Time Period")
         today = datetime.now()
-        hist_start = datetime.strptime(CFG.hist_start, "%Y-%m-%d") if hasattr(CFG, 'hist_start') else today - timedelta(days=365*25)
+        try:
+            hist_start = datetime.strptime(CFG.hist_start, "%Y-%m-%d") if hasattr(CFG, 'hist_start') else today - timedelta(days=365*25)
+        except Exception:
+            hist_start = today - timedelta(days=365*25)
         start_date = st.date_input("Start", value=hist_start, min_value=hist_start, max_value=today, label_visibility="collapsed")
         end_date = st.date_input("End", value=today, min_value=hist_start, max_value=today, label_visibility="collapsed")
 
-        # Forecast Horizon
+        # ── Forecast Horizon ──
         st.markdown("#### 🔮 Forecast Horizon")
         horizon = st.select_slider(
             "Horizon",
@@ -100,26 +108,28 @@ def render_sidebar(
             label_visibility="collapsed",
         )
 
-        st.markdown("---")
+        st.markdown("<hr>", unsafe_allow_html=True)
 
-        # System Status
+        # ── Quick Actions ──
+        st.markdown("#### ⚡ Quick Actions")
+        col_a, col_b = st.columns(2)
+        with col_a:
+            if st.button("📊 Forecast", key="sidebar_forecast", use_container_width=True):
+                st.session_state.trigger_forecast = True
+                st.session_state["nav_view"] = "🔮 Forecast"
+                st.rerun()
+        with col_b:
+            if st.button("🔔 Alerts", key="sidebar_alerts", use_container_width=True):
+                st.session_state.trigger_alerts = True
+
         with st.expander("⚙️ System Status", expanded=False):
-            c1, c2 = st.columns(2)
-            mode = c2.selectbox("Mode", ["Operational", "Research", "Validation"], label_visibility="collapsed", key="system_mode")
+            mode = st.selectbox("Mode", ["Operational", "Research", "Validation"], label_visibility="collapsed", key="system_mode")
             st.markdown(f"**Source:** {CFG.active_data_source.value}")
             st.markdown(f"**Districts:** {len(districts)}")
             st.markdown(f"**Scenario:** SSP2-4.5")
             st.markdown(f"**Period:** 2000–2040")
             st.markdown(f"**Forecast:** ML + CMIP6 Ensemble")
 
-        st.markdown("---")
-
-        st.markdown(f'''
-        <div class="sidebar-footer">
-            <span style="font-weight:600;color:var(--primary);font-size:0.65rem;">HydroVerse AI</span> v3.0<br>
-            Water Climate & Sustainability Lab<br>
-            <strong>IIT Indore</strong>
-        </div>
-        ''', unsafe_allow_html=True)
+        st.markdown("<hr>", unsafe_allow_html=True)
 
     return source, district, start_date, end_date, horizon, mode
