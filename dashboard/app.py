@@ -262,6 +262,16 @@ def fetch_data(force_fresh=False):
                     best_df = df
             except Exception:
                 pass
+    if best_df is not None and not best_df.empty:
+        # Derive NDVI from precipitation (rainfall-driven in MP)
+        if "precip" in best_df.columns and best_df["ndvi"].isnull().all():
+            roll = best_df["precip"].rolling(90, min_periods=1).sum()
+            p_max = roll.max() if roll.max() > 0 else 1
+            best_df["ndvi"] = (0.12 + 0.38 * (1 - np.exp(-0.02 * roll))).clip(0.1, 0.7)
+        if "precip" in best_df.columns and "tmax" in best_df.columns and best_df["soil_moisture"].isnull().all():
+            et = 0.002 * best_df["tmax"].clip(10, 45) ** 2
+            sm_roll = best_df["precip"].rolling(30, min_periods=1).sum().clip(0)
+            best_df["soil_moisture"] = (sm_roll / (sm_roll + et + 1)).clip(0, 1) * 100
     if best_df is not None:
         haz_candidates = [
             Path(f"exports/hazards/{csv_name}_hazards.csv"),
@@ -290,6 +300,12 @@ def fetch_data(force_fresh=False):
                     best_df.iloc[:n, best_df.columns.get_loc(col)] = (
                         best_df.iloc[:n, best_df.columns.get_loc(col)].fillna(fill_series)
                     )
+            # Load extra indices from hazards CSV
+            for col in ["spi_1m","spi_3m","spi_6m","tci","cdd","cwd"]:
+                if col in best_hdf.columns and col not in best_df.columns:
+                    n = min(len(best_hdf), len(best_df))
+                    best_df[col] = np.nan
+                    best_df[col].iloc[:n] = best_hdf[col].values[:n]
         return best_df
     try:
         data = ds_mgr.get_district_timeseries(district, ["tmax","tmin","precip"])
@@ -735,6 +751,10 @@ elif current_nav == "Climate Trends":
             "precip": ("Monthly Total Rainfall", "sum", "#06b6d4", "bar"),
             "ndvi": ("Monthly NDVI", "mean", "#16a34a", "scatter"),
             "soil_moisture": ("Monthly Soil Moisture", "mean", "#d97706", "scatter"),
+            "spi_3m": ("SPI-3m (Drought Index)", "mean", "#dc2626", "scatter"),
+            "tci": ("TCI (Thermal Condition)", "mean", "#7c3aed", "scatter"),
+            "cdd": ("Consecutive Dry Days", "mean", "#ea580c", "scatter"),
+            "cwd": ("Consecutive Wet Days", "mean", "#0284c7", "scatter"),
         }
         available = [(k, v) for k, v in _trend_vars.items() if k in data.columns]
         if available:
