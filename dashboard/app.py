@@ -220,9 +220,15 @@ if "nav_view" not in st.session_state:
 # Data fetching
 # ---------------------------------------------------------------------------
 def fetch_data(force_fresh=False):
+    # District name → CSV filename mapping (some districts use alternate names)
+    _name_map = {
+        "Khandwa": "East Nimar", "Khargone": "West Nimar",
+        "Narsinghpur": "Narsimhapur",
+    }
+    csv_name = _name_map.get(district, district)
     alt_base = Path.home() / "exports" / "raw"
-    raw_path = Path(f"exports/raw/{district}_data.csv")
-    candidates = [raw_path, alt_base / f"{district}_data.csv"]
+    raw_path = Path(f"exports/raw/{csv_name}_data.csv")
+    candidates = [raw_path, alt_base / f"{csv_name}_data.csv"]
     if force_fresh:
         try:
             data = ds_mgr.get_district_timeseries(district, ["tmax", "tmin", "precip"])
@@ -258,8 +264,8 @@ def fetch_data(force_fresh=False):
                 pass
     if best_df is not None:
         haz_candidates = [
-            Path(f"exports/hazards/{district}_hazards.csv"),
-            Path.home() / "exports" / "hazards" / f"{district}_hazards.csv",
+            Path(f"exports/hazards/{csv_name}_hazards.csv"),
+            Path.home() / "exports" / "hazards" / f"{csv_name}_hazards.csv",
         ]
         best_hdf = None
         best_sat = 0
@@ -1188,7 +1194,7 @@ st.markdown("""
 <div class="ai-float-btn" onclick="document.getElementById('ai-popup').style.display=document.getElementById('ai-popup').style.display==='none'?'flex':'none'">🤖</div>
 """, unsafe_allow_html=True)
 
-gemini_key = "gen-lang-client-0639385723"
+gemini_key = os.environ.get("GEMINI_API_KEY", "gen-lang-client-0639385723")
 try:
     import google.generativeai as genai
     genai.configure(api_key=gemini_key)

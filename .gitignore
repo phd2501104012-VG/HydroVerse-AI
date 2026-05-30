@@ -15,7 +15,9 @@ secrets.toml
 data/exports/
 data/realtime/
 cache_climate/
-exports/
+exports/forecasts/
+exports/hazards/
+exports/raw/
 *.nc
 *.h5
 *.hdf5
