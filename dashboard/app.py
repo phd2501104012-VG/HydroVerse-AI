@@ -695,6 +695,14 @@ elif current_nav == "Hazard Maps":
             paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
         fig.update_yaxes(scaleanchor="x")
         st.plotly_chart(fig, use_container_width=True, key="hazard_map_tab_v2")
+        st.markdown("""
+        <div style="display:flex;gap:16px;font-size:11px;color:#475569;margin-top:4px;flex-wrap:wrap;">
+          <span><span class="swatch" style="background:#dc2626"></span> Severe</span>
+          <span><span class="swatch" style="background:#f97316"></span> High</span>
+          <span><span class="swatch" style="background:#eab308"></span> Moderate</span>
+          <span><span class="swatch" style="background:#22c55e"></span> Low</span>
+        </div>
+        """, unsafe_allow_html=True)
     else:
         st.info("No boundary data — install a shapefile or check config.")
 
