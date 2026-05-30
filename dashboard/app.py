@@ -1215,7 +1215,8 @@ try:
     _gmodel = genai.GenerativeModel("gemini-2.0-flash")
 except Exception:
     pass
-_show_popup = st.session_state.get("_show_ai_popup", False)
+if "_show_ai_popup" not in st.session_state:
+    st.session_state._show_ai_popup = False
 if st.button("🤖 AI Assistant", key="ai_float_toggle", help="Toggle AI Assistant"):
     st.session_state._show_ai_popup = not st.session_state._show_ai_popup
     st.rerun()
