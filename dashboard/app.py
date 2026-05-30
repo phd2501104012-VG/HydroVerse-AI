@@ -343,6 +343,17 @@ if (not st.session_state.get("data_loaded") or st.session_state.get("data_distri
                 df = dl.merge_into(df, district)
             except Exception:
                 pass
+        # Extend data to today so forecasts start from current date
+        if not df.empty:
+            _last = df.index.max()
+            _today = pd.Timestamp(datetime.now().date())
+            if _last < _today:
+                _pad = pd.date_range(_last + pd.Timedelta(days=1), _today, freq="D")
+                if len(_pad) > 0:
+                    _pad_df = pd.DataFrame(index=_pad, columns=df.columns)
+                    for c in df.columns:
+                        _pad_df[c] = df[c].iloc[-1]
+                    df = pd.concat([df, _pad_df])
         st.session_state.data = df
         core_check = [c for c in ["tmax","tmin","precip","ndvi","soil_moisture"] if c in df.columns]
         if not df.empty and len(core_check) > 0 and not df[core_check].isnull().all().all():
