@@ -633,31 +633,67 @@ if current_nav == tr("Live Monitoring"):
                     plot_bgcolor="rgba(0,0,0,0)")
                 st.plotly_chart(fig2, use_container_width=True, key="lm_precip")
         else:
-            # Show recent observations when forecast not available
-            recent = data[["tmax","precip"]].dropna().tail(30)
-            if not recent.empty:
-                c1, c2 = st.columns(2)
-                with c1:
-                    fig = go.Figure()
-                    fig.add_trace(go.Scatter(x=recent.index, y=recent["tmax"],
-                        mode="lines+markers", name=tr("Max Temperature"), line=dict(color="#f97316", width=2)))
-                    fig.update_layout(title=tr("Recent Temperature (°C)"), height=300,
-                        margin=dict(t=30,b=10,l=10,r=10), paper_bgcolor="rgba(0,0,0,0)",
-                        plot_bgcolor="rgba(0,0,0,0)")
-                    st.plotly_chart(fig, use_container_width=True, key="lm_recent_tmax")
-                with c2:
-                    fig2 = go.Figure()
-                    fig2.add_trace(go.Bar(x=recent.index, y=recent["precip"],
-                        name=tr("Rainfall"), marker_color="#3b82f6"))
-                    fig2.update_layout(title=tr("Recent Rainfall (mm)"), height=300,
-                        margin=dict(t=30,b=10,l=10,r=10), paper_bgcolor="rgba(0,0,0,0)",
-                        plot_bgcolor="rgba(0,0,0,0)")
-                    st.plotly_chart(fig2, use_container_width=True, key="lm_recent_precip")
-            else:
-                # Show raw data availability info
-                _avail = [c for c in ["tmax","tmin","precip","ndvi","soil_moisture"] if c in data.columns and data[c].notna().any()]
-                _last_d = data.index.max().date() if not data.empty else "—"
-                st.info(f"Data: {', '.join(_avail)} · Rows: {len(data)} · Last: {_last_d}" if _avail else tr("No recent observations available."))
+            # Try daily forecast engine as fallback (gives 7-day slice)
+            _fc_ok = False
+            try:
+                _fc_tmax = forecast_engine.generate_daily_to_2040(data, "tmax", district)
+                _fc_precip = forecast_engine.generate_daily_to_2040(data, "precip", district)
+                if _fc_tmax is not None and not _fc_tmax.empty:
+                    _fc_tmax["date"] = pd.to_datetime(_fc_tmax["date"])
+                    _fc_7 = _fc_tmax.iloc[:7]
+                    if _fc_precip is not None and not _fc_precip.empty:
+                        _fc_precip["date"] = pd.to_datetime(_fc_precip["date"])
+                        _fc_7p = _fc_precip.iloc[:7]
+                    else:
+                        _fc_7p = pd.DataFrame()
+                    if not _fc_7.empty:
+                        _fc_ok = True
+                        c1, c2 = st.columns(2)
+                        with c1:
+                            fig = go.Figure()
+                            fig.add_trace(go.Scatter(x=_fc_7["date"], y=_fc_7["forecast"],
+                                mode="lines+markers", name=tr("Max Temperature"), line=dict(color="#f97316", width=2)))
+                            fig.update_layout(title=tr("Temperature Forecast (°C)"), height=300,
+                                margin=dict(t=30,b=10,l=10,r=10), paper_bgcolor="rgba(0,0,0,0)",
+                                plot_bgcolor="rgba(0,0,0,0)")
+                            st.plotly_chart(fig, use_container_width=True, key="lm_fc_tmax")
+                        with c2:
+                            fig2 = go.Figure()
+                            if not _fc_7p.empty:
+                                fig2.add_trace(go.Bar(x=_fc_7p["date"], y=_fc_7p["forecast"],
+                                    name=tr("Rainfall"), marker_color="#3b82f6"))
+                            fig2.update_layout(title=tr("Rainfall Forecast (mm)"), height=300,
+                                margin=dict(t=30,b=10,l=10,r=10), paper_bgcolor="rgba(0,0,0,0)",
+                                plot_bgcolor="rgba(0,0,0,0)")
+                            st.plotly_chart(fig2, use_container_width=True, key="lm_fc_precip")
+            except Exception:
+                pass
+            if not _fc_ok:
+                # Show recent observations when forecast not available
+                recent = data[["tmax","precip"]].dropna().tail(30)
+                if not recent.empty:
+                    c1, c2 = st.columns(2)
+                    with c1:
+                        fig = go.Figure()
+                        fig.add_trace(go.Scatter(x=recent.index, y=recent["tmax"],
+                            mode="lines+markers", name=tr("Max Temperature"), line=dict(color="#f97316", width=2)))
+                        fig.update_layout(title=tr("Recent Temperature (°C)"), height=300,
+                            margin=dict(t=30,b=10,l=10,r=10), paper_bgcolor="rgba(0,0,0,0)",
+                            plot_bgcolor="rgba(0,0,0,0)")
+                        st.plotly_chart(fig, use_container_width=True, key="lm_recent_tmax")
+                    with c2:
+                        fig2 = go.Figure()
+                        fig2.add_trace(go.Bar(x=recent.index, y=recent["precip"],
+                            name=tr("Rainfall"), marker_color="#3b82f6"))
+                        fig2.update_layout(title=tr("Recent Rainfall (mm)"), height=300,
+                            margin=dict(t=30,b=10,l=10,r=10), paper_bgcolor="rgba(0,0,0,0)",
+                            plot_bgcolor="rgba(0,0,0,0)")
+                        st.plotly_chart(fig2, use_container_width=True, key="lm_recent_precip")
+                else:
+                    # Show raw data availability info
+                    _avail = [c for c in ["tmax","tmin","precip","ndvi","soil_moisture"] if c in data.columns and data[c].notna().any()]
+                    _last_d = data.index.max().date() if not data.empty else "—"
+                    st.info(f"Data: {', '.join(_avail)} · Rows: {len(data)} · Last: {_last_d}" if _avail else tr("No recent observations available."))
     else:
         st.info(tr("No data available for this district."))
     st.markdown('</div>', unsafe_allow_html=True)
@@ -1253,16 +1289,15 @@ else:
         _today = datetime.now()
         forecast_days = [tr("Today")]
         forecast_icons = ["☀️"]
-        forecast_highs = [41]
-        forecast_lows = [28]
+        forecast_highs = [41] * 7
+        forecast_lows = [28] * 7
         for i in range(1, 7):
             d = _today + timedelta(days=i)
             forecast_days.append(d.strftime('%d %b'))
         # Use real data for forecast temps if available
         if not data.empty and "tmax" in data.columns and data["tmax"].notna().any():
-            _last_tmax = data["tmax"].dropna().iloc[-1]
-            _last_tmin = data["tmin"].dropna().iloc[-1] if "tmin" in data.columns and data["tmin"].notna().any() else _last_tmax - 10
-            # Simple trend: gradually return to mean over 7 days
+            _last_tmax = float(data["tmax"].dropna().iloc[-1])
+            _last_tmin = float(data["tmin"].dropna().iloc[-1]) if "tmin" in data.columns and data["tmin"].notna().any() else _last_tmax - 10
             _mean_tmax = float(data["tmax"].mean())
             _mean_tmin = float(data["tmin"].mean()) if "tmin" in data.columns and data["tmin"].notna().any() else _mean_tmax - 10
             for i in range(7):
