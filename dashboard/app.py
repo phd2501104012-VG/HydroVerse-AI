@@ -1288,7 +1288,7 @@ else:
         # Dynamic 7-day forecast based on actual data
         _today = datetime.now()
         forecast_days = [tr("Today")]
-        forecast_icons = ["☀️"]
+        forecast_icons = ["☀️"] * 7
         forecast_highs = [41] * 7
         forecast_lows = [28] * 7
         for i in range(1, 7):
