@@ -7,7 +7,7 @@ LANGUAGES = {"English": "en", "हिन्दी": "hi"}
 def get_lang():
     return st.session_state.get("_lang", "en")
 
-def _(en_text: str) -> str:
+def tr(en_text: str) -> str:
     """Translate en_text to the current session language."""
     try:
         lang = get_lang()
