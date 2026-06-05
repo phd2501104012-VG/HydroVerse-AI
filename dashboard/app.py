@@ -356,6 +356,8 @@ if (not st.session_state.get("data_loaded") or st.session_state.get("data_distri
                         _pad_df[c] = df[c].iloc[-1]
                     df = pd.concat([df, _pad_df])
         st.session_state.data = df
+        st.session_state.data_last_date = str(df.index.max().date()) if not df.empty else "none"
+        st.session_state.data_is_padded = not df.empty and df.index.max().date() == datetime.now().date()
         core_check = [c for c in ["tmax","tmin","precip","ndvi","soil_moisture"] if c in df.columns]
         if not df.empty and len(core_check) > 0 and not df[core_check].isnull().all().all():
             try:
@@ -558,6 +560,9 @@ with st.sidebar:
     <div style="margin-top:12px;font-size:10px;color:#94a3b8;text-align:center;">
       {_('Source')}: {CFG.active_data_source.value} · {len(all_dists)} {_('districts')} · {_('Scenario')}: SSP2-4.5
     </div>
+    <div style="margin-top:6px;font-size:9px;color:#94a3b8;text-align:center;">
+      Data: {st.session_state.get('data_last_date','—')} · {'Live' if st.session_state.get('data_is_padded') else 'Hist'}
+    </div>
     """, unsafe_allow_html=True)
 
 # ---------------------------------------------------------------------------
@@ -758,12 +763,13 @@ elif current_nav == _("Hazard Maps"):
             paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
         fig.update_yaxes(scaleanchor="x")
         st.plotly_chart(fig, use_container_width=True, key="hazard_map_tab_v2")
+        _s1 = _('Severe'); _s2 = _('High'); _s3 = _('Moderate'); _s4 = _('Low')
         st.markdown(f"""
         <div style="display:flex;gap:16px;font-size:11px;color:#475569;margin-top:4px;flex-wrap:wrap;">
-          <span><span class="swatch" style="background:#dc2626"></span> {_('Severe')}</span>
-          <span><span class="swatch" style="background:#f97316"></span> {_('High')}</span>
-          <span><span class="swatch" style="background:#eab308"></span> {_('Moderate')}</span>
-          <span><span class="swatch" style="background:#22c55e"></span> {_('Low')}</span>
+          <span><span class="swatch" style="background:#dc2626"></span> {_s1}</span>
+          <span><span class="swatch" style="background:#f97316"></span> {_s2}</span>
+          <span><span class="swatch" style="background:#eab308"></span> {_s3}</span>
+          <span><span class="swatch" style="background:#22c55e"></span> {_s4}</span>
         </div>
         """, unsafe_allow_html=True)
     else:
@@ -997,14 +1003,16 @@ else:
         else:
             st.info(_("No boundary data — install a shapefile or check config."))
 
-    # Legend inline
+    # Legend inline (pre-compute translations to avoid f-string issues)
+    _vh = _('Very High'); _hi = _('High'); _mo = _('Moderate')
+    _lo = _('Low'); _vl = _('Very Low')
     st.markdown(f"""
     <div style="display:flex;gap:16px;font-size:11px;color:#475569;margin-top:4px;flex-wrap:wrap;">
-      <span><span class="swatch" style="background:#dc2626"></span> {_('Very High')}</span>
-      <span><span class="swatch" style="background:#f97316"></span> {_('High')}</span>
-      <span><span class="swatch" style="background:#eab308"></span> {_('Moderate')}</span>
-      <span><span class="swatch" style="background:#22c55e"></span> {_('Low')}</span>
-      <span><span class="swatch" style="background:#15803d"></span> {_('Very Low')}</span>
+      <span><span class="swatch" style="background:#dc2626"></span> {_vh}</span>
+      <span><span class="swatch" style="background:#f97316"></span> {_hi}</span>
+      <span><span class="swatch" style="background:#eab308"></span> {_mo}</span>
+      <span><span class="swatch" style="background:#22c55e"></span> {_lo}</span>
+      <span><span class="swatch" style="background:#15803d"></span> {_vl}</span>
     </div>
     """, unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)

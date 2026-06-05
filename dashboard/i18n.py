@@ -9,10 +9,13 @@ def get_lang():
 
 def _(en_text: str) -> str:
     """Translate en_text to the current session language."""
-    lang = get_lang()
-    if lang == "en":
+    try:
+        lang = get_lang()
+        if lang == "en":
+            return en_text
+        return HI_TRANSLATIONS.get(en_text, en_text)
+    except Exception:
         return en_text
-    return HI_TRANSLATIONS.get(en_text, en_text)
 
 # ─── Hindi translations ───
 HI_TRANSLATIONS = {
