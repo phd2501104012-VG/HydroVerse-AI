@@ -33,6 +33,7 @@ from dashboard.components.event_cards import render_event_cards
 from dashboard.components.ai_insights import render_ai_insights
 from dashboard.components.forecast_view import render_forecast_tab
 from dashboard.components.comparison_advisory import render_source_comparison, render_policy_advisory
+from dashboard.i18n import _
 
 try:
     from data.cmip6_loader import CMIP6Loader
@@ -391,10 +392,10 @@ av = _safe_last("agri_severity")
 sev_dict = {"flood": fv, "drought": dv, "heatwave": hv_, "agri_stress": av}
 
 def _risk_word(v):
-    if v >= 75: return "Severe"
-    if v >= 50: return "Warning"
-    if v >= 25: return "Watch"
-    return "Low"
+    if v >= 75: return _("Severe")
+    if v >= 50: return _("Warning")
+    if v >= 25: return _("Watch")
+    return _("Low")
 
 def _risk_color(v):
     if v >= 75: return "#dc2626"
@@ -482,9 +483,24 @@ with st.sidebar:
 
     st.markdown("<hr style='margin:8px 0;border-color:#e2e8f0'>", unsafe_allow_html=True)
 
+    # Language selector
+    st.markdown("<div style='color:#64748b;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px;'>🌐 Language / भाषा</div>", unsafe_allow_html=True)
+    _lang_opts = {"English": "en", "हिन्दी": "hi"}
+    _current_lang = st.session_state.get("_lang", "en")
+    _lang_label = next(k for k, v in _lang_opts.items() if v == _current_lang)
+    _chosen_lang = st.selectbox("Language", list(_lang_opts.keys()),
+                                index=list(_lang_opts.values()).index(_current_lang),
+                                label_visibility="collapsed", key="_lang_sel")
+    _new_lang = _lang_opts[_chosen_lang]
+    if _new_lang != st.session_state.get("_lang", "en"):
+        st.session_state["_lang"] = _new_lang
+        st.rerun()
+
+    st.markdown("<hr style='margin:8px 0;border-color:#e2e8f0'>", unsafe_allow_html=True)
+
     # Navigation
-    nav_items = ["Overview", "Live Monitoring", "Forecasting", "Hazard Maps",
-                  "Climate Trends", "AI Assistant", "Alerts"]
+    nav_items = [_("Overview"), _("Live Monitoring"), _("Forecasting"), _("Hazard Maps"),
+                  _("Climate Trends"), _("AI Assistant"), _("Alerts")]
     current_nav = st.session_state.get("nav_view", "Overview")
     default_idx = nav_items.index(current_nav) if current_nav in nav_items else 0
     chosen = st.radio("Navigate", nav_items, index=default_idx, label_visibility="collapsed", key="nav_radio")
@@ -495,18 +511,18 @@ with st.sidebar:
     st.markdown("<hr style='margin:8px 0;border-color:#e2e8f0'>", unsafe_allow_html=True)
 
     # District selector
-    st.markdown("<div style='color:#64748b;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px;'>📍 District</div>", unsafe_allow_html=True)
+    st.markdown(f"<div style='color:#64748b;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px;'>{_('📍 District')}</div>", unsafe_allow_html=True)
     all_dists = districts if districts else MP_DISTRICTS
     default_idx = all_dists.index("Bhopal") if "Bhopal" in all_dists else 0
-    sel_dist = st.selectbox("District", all_dists, index=default_idx, label_visibility="collapsed", key="district", help="Select district to analyze")
+    sel_dist = st.selectbox(_("Select District"), all_dists, index=default_idx, label_visibility="collapsed", key="district", help=_("Select district to analyze"))
     if sel_dist != district:
         st.session_state.district = sel_dist
         st.session_state.data_loaded = False
         st.rerun()
 
     # Data source
-    st.markdown("<div style='color:#94a3b8;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px;'>🎯 Data Source</div>", unsafe_allow_html=True)
-    src = st.selectbox("Source", [s.value for s in DataSource], index=0, label_visibility="collapsed", key="data_source")
+    st.markdown(f"<div style='color:#94a3b8;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px;'>{_('🎯 Data Source')}</div>", unsafe_allow_html=True)
+    src = st.selectbox(_("Select Source"), [s.value for s in DataSource], index=0, label_visibility="collapsed", key="data_source")
     if src == DataSource.ERA5.value:
         CFG.active_data_source = DataSource.ERA5
     elif src == DataSource.IMD.value:
@@ -515,14 +531,14 @@ with st.sidebar:
         CFG.active_data_source = DataSource.AUTO
 
     # Time period
-    st.markdown("<div style='color:#94a3b8;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px;'>⏱️ Time Period</div>", unsafe_allow_html=True)
+    st.markdown(f"<div style='color:#94a3b8;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px;'>{_('⏱️ Time Period')}</div>", unsafe_allow_html=True)
     today = datetime.now()
     try:
         hist_start = datetime.strptime(CFG.hist_start, "%Y-%m-%d") if hasattr(CFG, 'hist_start') else today - timedelta(days=365*25)
     except Exception:
         hist_start = today - timedelta(days=365*25)
-    start_date = st.date_input("Start", value=hist_start, label_visibility="collapsed", key="sd_start")
-    end_date = st.date_input("End", value=today, label_visibility="collapsed", key="sd_end")
+    start_date = st.date_input(_("Start"), value=hist_start, label_visibility="collapsed", key="sd_start")
+    end_date = st.date_input(_("End"), value=today, label_visibility="collapsed", key="sd_end")
 
     st.markdown("<hr style='margin:8px 0;border-color:rgba(255,255,255,0.06)'>", unsafe_allow_html=True)
 
@@ -531,16 +547,16 @@ with st.sidebar:
     <div class="status-badge">
       <div style="display:flex;align-items:center;gap:8px;">
         <span class="pulse-dot"></span>
-        <span style="font-size:13px;font-weight:600;color:#f1f5f9;">System Status</span>
+        <span style="font-size:13px;font-weight:600;color:#f1f5f9;">{_('System Status')}</span>
       </div>
-      <div style="font-size:11px;color:#94a3b8;margin-top:4px;">All systems operational</div>
+      <div style="font-size:11px;color:#94a3b8;margin-top:4px;">{_('All systems operational')}</div>
     </div>
     <div class="status-badge" style="margin-top:8px;">
       <div style="font-size:14px;font-weight:600;color:#f1f5f9;font-family:'JetBrains Mono',monospace;" id="sidebar-clock">{datetime.now().strftime('%H:%M')}</div>
       <div style="font-size:11px;color:#94a3b8;margin-top:2px;">{datetime.now().strftime('%d %B %Y')}</div>
     </div>
     <div style="margin-top:12px;font-size:10px;color:#94a3b8;text-align:center;">
-      Source: {CFG.active_data_source.value} · {len(all_dists)} districts · SSP2-4.5
+      {_('Source')}: {CFG.active_data_source.value} · {len(all_dists)} {_('districts')} · {_('Scenario')}: SSP2-4.5
     </div>
     """, unsafe_allow_html=True)
 
@@ -556,20 +572,20 @@ st.markdown(f"""
   <div>
     <h1 style="font-size:26px;font-weight:700;letter-spacing:-0.03em;margin:0;">
       <span id="header-district">{district}</span>,
-      <span style="color:#64748b;font-weight:600;">Madhya Pradesh</span>
+      <span style="color:#64748b;font-weight:600;">{_('Madhya Pradesh')}</span>
     </h1>
-    <p style="color:#64748b;font-size:13px;margin:2px 0 0;">Climate Hazard Dashboard</p>
+    <p style="color:#64748b;font-size:13px;margin:2px 0 0;">{_('Climate Hazard Dashboard')}</p>
   </div>
   <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
     <div class="pill-ctrl">
       <div>
-        <div style="font-size:10px;color:#64748b;font-weight:500;">Time Period</div>
-        <div style="font-size:13px;font-weight:600;color:#0f172a;">15 Days Forecast</div>
+        <div style="font-size:10px;color:#64748b;font-weight:500;">{_('Time Period')}</div>
+        <div style="font-size:13px;font-weight:600;color:#0f172a;">15 {_('Days Forecast')}</div>
       </div>
     </div>
     <div class="pill-ctrl" style="min-width:180px;">
       <div style="flex:1;">
-        <div style="font-size:10px;color:#64748b;font-weight:500;">District</div>
+        <div style="font-size:10px;color:#64748b;font-weight:500;">{_('District')}</div>
         <div style="font-size:13px;font-weight:600;color:#0f172a;">{district}</div>
       </div>
     </div>
@@ -581,8 +597,8 @@ current_nav = st.session_state.nav_view
 today = now.date()
 
 # ── MAIN CONTENT DISPATCH ──
-if current_nav == "Live Monitoring":
-    st.markdown(f'<div class="card"><h3 class="card-title">Live Monitoring — 7-Day Forecast for {district}</h3>')
+if current_nav == _("Live Monitoring"):
+    st.markdown(f'<div class="card"><h3 class="card-title">{_("Live Monitoring — 7-Day Forecast for")} {district}</h3>')
     if has_data:
         try:
             fc_tmax = forecast_engine.ml.generate_forecast(data, "tmax", district, horizon_days=7) if has_data else pd.DataFrame()
@@ -596,8 +612,8 @@ if current_nav == "Live Monitoring":
                 if not fc_tmax.empty:
                     fc_tmax["date"] = pd.to_datetime(fc_tmax["date"])
                     fig.add_trace(go.Scatter(x=fc_tmax["date"], y=fc_tmax["forecast"],
-                        mode="lines+markers", name="Max Temp", line=dict(color="#f97316", width=2)))
-                fig.update_layout(title="Temperature Forecast (°C)", height=300,
+                        mode="lines+markers", name=_("Max Temperature"), line=dict(color="#f97316", width=2)))
+                fig.update_layout(title=_("Temperature Forecast (°C)"), height=300,
                     margin=dict(t=30,b=10,l=10,r=10), paper_bgcolor="rgba(0,0,0,0)",
                     plot_bgcolor="rgba(0,0,0,0)")
                 st.plotly_chart(fig, use_container_width=True, key="lm_temp")
@@ -606,8 +622,8 @@ if current_nav == "Live Monitoring":
                 if not fc_precip.empty:
                     fc_precip["date"] = pd.to_datetime(fc_precip["date"])
                     fig2.add_trace(go.Bar(x=fc_precip["date"], y=fc_precip["forecast"],
-                        name="Rainfall", marker_color="#3b82f6"))
-                fig2.update_layout(title="Rainfall Forecast (mm)", height=300,
+                        name=_("Rainfall"), marker_color="#3b82f6"))
+                fig2.update_layout(title=_("Rainfall Forecast (mm)"), height=300,
                     margin=dict(t=30,b=10,l=10,r=10), paper_bgcolor="rgba(0,0,0,0)",
                     plot_bgcolor="rgba(0,0,0,0)")
                 st.plotly_chart(fig2, use_container_width=True, key="lm_precip")
@@ -619,49 +635,49 @@ if current_nav == "Live Monitoring":
                 with c1:
                     fig = go.Figure()
                     fig.add_trace(go.Scatter(x=recent.index, y=recent["tmax"],
-                        mode="lines+markers", name="Max Temp", line=dict(color="#f97316", width=2)))
-                    fig.update_layout(title="Recent Temperature (°C)", height=300,
+                        mode="lines+markers", name=_("Max Temperature"), line=dict(color="#f97316", width=2)))
+                    fig.update_layout(title=_("Recent Temperature (°C)"), height=300,
                         margin=dict(t=30,b=10,l=10,r=10), paper_bgcolor="rgba(0,0,0,0)",
                         plot_bgcolor="rgba(0,0,0,0)")
                     st.plotly_chart(fig, use_container_width=True, key="lm_recent_tmax")
                 with c2:
                     fig2 = go.Figure()
                     fig2.add_trace(go.Bar(x=recent.index, y=recent["precip"],
-                        name="Rainfall", marker_color="#3b82f6"))
-                    fig2.update_layout(title="Recent Rainfall (mm)", height=300,
+                        name=_("Rainfall"), marker_color="#3b82f6"))
+                    fig2.update_layout(title=_("Recent Rainfall (mm)"), height=300,
                         margin=dict(t=30,b=10,l=10,r=10), paper_bgcolor="rgba(0,0,0,0)",
                         plot_bgcolor="rgba(0,0,0,0)")
                     st.plotly_chart(fig2, use_container_width=True, key="lm_recent_precip")
             else:
-                st.info("No recent observations available.")
+                st.info(_("No recent observations available."))
     else:
-        st.info("No data available for this district.")
+        st.info(_("No data available for this district."))
     st.markdown('</div>', unsafe_allow_html=True)
 
-elif current_nav == "Forecasting":
-    st.markdown(f'<div class="card"><h3 class="card-title">Climate Forecasting to 2040 — {district}</h3>')
+elif current_nav == _("Forecasting"):
+    st.markdown(f'<div class="card"><h3 class="card-title">{_("Climate Forecasting to 2040 —")} {district}</h3>')
     if has_data:
         try:
             targets_to_plot = ["tmax", "precip"]
-            tabs_2040 = st.tabs(["Temperature", "Rainfall", "Hazard Forecast"])
+            tabs_2040 = st.tabs([_("Temperature"), _("Rainfall"), _("Hazard Forecast")])
             for ti, tgt in enumerate(targets_to_plot):
                 with tabs_2040[ti]:
-                    with st.spinner(f"Generating {tgt} forecast..."):
+                    with st.spinner(f"{_('Generating')} {tgt}..."):
                         fc_df = forecast_engine.generate_daily_to_2040(data, tgt, district)
                     if fc_df is not None and not fc_df.empty:
                         fc_df["date"] = pd.to_datetime(fc_df["date"])
                         fig = go.Figure()
                         fig.add_trace(go.Scatter(x=fc_df["date"], y=fc_df["forecast"],
                             mode="lines", name=tgt, line=dict(color="#2563eb", width=1.5)))
-                        fig.update_layout(title=f"{tgt.upper()} Forecast to 2040", height=400,
+                        fig.update_layout(title=f"{tgt.upper()} {_('Forecast to 2040')}", height=400,
                             margin=dict(t=30,b=10,l=10,r=10), paper_bgcolor="rgba(0,0,0,0)",
                             plot_bgcolor="rgba(0,0,0,0)")
                         st.plotly_chart(fig, use_container_width=True, key=f"fc_2040_{tgt}")
                     else:
-                        st.info(f"{tgt} forecast not available.")
+                        st.info(f"{tgt} {_('forecast not available.')}")
             with tabs_2040[2]:
-                st.markdown("#### Hazard Forecast to 2040")
-                with st.spinner("Projecting hazards to 2040..."):
+                st.markdown(f"#### {_('Hazard Forecast to 2040')}")
+                with st.spinner(_("Projecting hazards to 2040...")):
                     fc_tmax = forecast_engine.generate_daily_to_2040(data, "tmax", district)
                     fc_precip = forecast_engine.generate_daily_to_2040(data, "precip", district)
                 fig_h = go.Figure()
@@ -670,7 +686,7 @@ elif current_nav == "Forecasting":
                     hist_mean = float(data["tmax"].mean())
                     heatwave = ((fc_tmax["forecast"] - hist_mean) / 8 * 100).clip(0, 100)
                     fig_h.add_trace(go.Scatter(x=fc_tmax["date"], y=heatwave,
-                        mode="lines", name="Heatwave", line=dict(color="#ef4444", width=1)))
+                        mode="lines", name=_("Heatwave"), line=dict(color="#ef4444", width=1)))
                 if fc_precip is not None and not fc_precip.empty and "precip" in data.columns:
                     fc_precip["date"] = pd.to_datetime(fc_precip["date"])
                     precip_mean = float(data["precip"].mean())
@@ -678,26 +694,26 @@ elif current_nav == "Forecasting":
                     flood = (fc_precip["forecast"] / max(precip_max, 1) * 100).clip(0, 100)
                     drought = ((precip_mean - fc_precip["forecast"].clip(0)) / max(precip_mean, 1) * 100).clip(0, 100)
                     fig_h.add_trace(go.Scatter(x=fc_precip["date"], y=flood,
-                        mode="lines", name="Flood", line=dict(color="#3b82f6", width=1)))
+                        mode="lines", name=_("Flood"), line=dict(color="#3b82f6", width=1)))
                     fig_h.add_trace(go.Scatter(x=fc_precip["date"], y=drought,
-                        mode="lines", name="Drought", line=dict(color="#f59e0b", width=1)))
+                        mode="lines", name=_("Drought"), line=dict(color="#f59e0b", width=1)))
                 if fig_h.data:
                     fig_h.update_layout(height=350, margin=dict(t=10,b=10,l=10,r=10),
                         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
                     st.plotly_chart(fig_h, use_container_width=True, key="fc_hazard_2040")
                 else:
-                    st.info("Hazard projection not available.")
+                    st.info(_("Hazard projection not available."))
         except Exception as e:
-            st.warning(f"Forecast engine unavailable: {e}")
+            st.warning(f"{_('Forecast engine unavailable:')} {e}")
     else:
-        st.info("No historical data available for forecasting.")
+        st.info(_("No historical data available for forecasting."))
     st.markdown('</div>', unsafe_allow_html=True)
 
-elif current_nav == "Hazard Maps":
+elif current_nav == _("Hazard Maps"):
     if bounds_mgr:
         gdf = bounds_mgr.gdf.copy()
         dlist = gdf[CFG.district_col].tolist() if CFG.district_col in gdf.columns else []
-        hazt = st.radio("", ["Flood", "Drought", "Heatwave", "Agri Stress"],
+        hazt = st.radio("", [_("Flood"), _("Drought"), _("Heatwave"), _("Agri Stress")],
                         horizontal=True, label_visibility="collapsed",
                         key="hazardmap_hazard_type")
         haz_map = {"Flood": ("flood_severity", "flood"),
@@ -742,30 +758,30 @@ elif current_nav == "Hazard Maps":
             paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
         fig.update_yaxes(scaleanchor="x")
         st.plotly_chart(fig, use_container_width=True, key="hazard_map_tab_v2")
-        st.markdown("""
+        st.markdown(f"""
         <div style="display:flex;gap:16px;font-size:11px;color:#475569;margin-top:4px;flex-wrap:wrap;">
-          <span><span class="swatch" style="background:#dc2626"></span> Severe</span>
-          <span><span class="swatch" style="background:#f97316"></span> High</span>
-          <span><span class="swatch" style="background:#eab308"></span> Moderate</span>
-          <span><span class="swatch" style="background:#22c55e"></span> Low</span>
+          <span><span class="swatch" style="background:#dc2626"></span> {_('Severe')}</span>
+          <span><span class="swatch" style="background:#f97316"></span> {_('High')}</span>
+          <span><span class="swatch" style="background:#eab308"></span> {_('Moderate')}</span>
+          <span><span class="swatch" style="background:#22c55e"></span> {_('Low')}</span>
         </div>
         """, unsafe_allow_html=True)
     else:
-        st.info("No boundary data — install a shapefile or check config.")
+        st.info(_("No boundary data — install a shapefile or check config."))
 
-elif current_nav == "Climate Trends":
-    st.markdown(f'<div class="card"><h3 class="card-title">Climate Trends — {district}</h3>')
+elif current_nav == _("Climate Trends"):
+    st.markdown(f'<div class="card"><h3 class="card-title">{_("Climate Trends —")} {district}</h3>')
     if has_data:
         _trend_vars = {
-            "tmax": ("Monthly Max Temperature", "mean", "#f97316", "scatter"),
-            "tmin": ("Monthly Min Temperature", "mean", "#3b82f6", "scatter"),
-            "precip": ("Monthly Total Rainfall", "sum", "#06b6d4", "bar"),
-            "ndvi": ("Monthly NDVI", "mean", "#16a34a", "scatter"),
-            "soil_moisture": ("Monthly Soil Moisture", "mean", "#d97706", "scatter"),
-            "spi_3m": ("SPI-3m (Drought Index)", "mean", "#dc2626", "scatter"),
-            "tci": ("TCI (Thermal Condition)", "mean", "#7c3aed", "scatter"),
-            "cdd": ("Consecutive Dry Days", "mean", "#ea580c", "scatter"),
-            "cwd": ("Consecutive Wet Days", "mean", "#0284c7", "scatter"),
+            "tmax": (_("Monthly Max Temperature"), "mean", "#f97316", "scatter"),
+            "tmin": (_("Monthly Min Temperature"), "mean", "#3b82f6", "scatter"),
+            "precip": (_("Monthly Total Rainfall"), "sum", "#06b6d4", "bar"),
+            "ndvi": (_("Monthly NDVI"), "mean", "#16a34a", "scatter"),
+            "soil_moisture": (_("Monthly Soil Moisture"), "mean", "#d97706", "scatter"),
+            "spi_3m": (_("SPI-3m (Drought Index)"), "mean", "#dc2626", "scatter"),
+            "tci": (_("TCI (Thermal Condition)"), "mean", "#7c3aed", "scatter"),
+            "cdd": (_("Consecutive Dry Days"), "mean", "#ea580c", "scatter"),
+            "cwd": (_("Consecutive Wet Days"), "mean", "#0284c7", "scatter"),
         }
         available = [(k, v) for k, v in _trend_vars.items() if k in data.columns]
         if available:
@@ -779,7 +795,7 @@ elif current_nav == "Climate Trends":
                     fig_all.add_trace(go.Scatter(x=monthly.index, y=normalized,
                         mode="lines", name=var.upper(), line=dict(color=color, width=1.5)))
             if fig_all.data:
-                fig_all.update_layout(title="All Variables (Normalized 0–1)", height=250,
+                fig_all.update_layout(title=_("All Variables (Normalized 0–1)"), height=250,
                     margin=dict(t=30,b=10,l=10,r=10), paper_bgcolor="rgba(0,0,0,0)",
                     plot_bgcolor="rgba(0,0,0,0)", legend=dict(orientation="h", y=1.1))
                 st.plotly_chart(fig_all, use_container_width=True, key="ct_all")
@@ -803,11 +819,11 @@ elif current_nav == "Climate Trends":
                             plot_bgcolor="rgba(0,0,0,0)")
                         st.plotly_chart(fig, use_container_width=True, key=f"ct_{var}")
     else:
-        st.info("No historical data available.")
+        st.info(_("No historical data available."))
     st.markdown('</div>', unsafe_allow_html=True)
 
-elif current_nav == "AI Assistant":
-    st.markdown('<div class="card"><h3 class="card-title">AI Climate Assistant</h3>', unsafe_allow_html=True)
+elif current_nav == _("AI Assistant"):
+    st.markdown(f'<div class="card"><h3 class="card-title">{_("AI Climate Assistant")}</h3>', unsafe_allow_html=True)
     gemini_key = os.environ.get("GEMINI_API_KEY", "gen-lang-client-0639385723")
     _model = None
     _model_err = None
@@ -816,9 +832,9 @@ elif current_nav == "AI Assistant":
         genai.configure(api_key=gemini_key)
         _model = genai.GenerativeModel("gemini-pro")
     except ImportError:
-        _model_err = "Install google-generativeai to enable the AI Assistant."
+        _model_err = _("Install google-generativeai to enable the AI Assistant.")
     except Exception as e:
-        _model_err = f"AI Assistant unavailable: {e}"
+        _model_err = f"{_('AI Assistant unavailable:')} {e}"
     if _model_err:
         st.warning(_model_err)
     else:
@@ -827,7 +843,7 @@ elif current_nav == "AI Assistant":
         for role, text in st.session_state.chat_history[-10:]:
             with st.chat_message(role):
                 st.markdown(text)
-        if prompt := st.chat_input("Ask about climate, hazards, or MP districts..."):
+        if prompt := st.chat_input(_("Ask about climate, hazards, or MP districts...")):
             st.session_state.chat_history.append(("user", prompt))
             with st.chat_message("user"):
                 st.markdown(prompt)
@@ -840,30 +856,30 @@ elif current_nav == "AI Assistant":
                     st.markdown(resp.text)
                     st.session_state.chat_history.append(("assistant", resp.text))
                 except Exception as e:
-                    st.error(f"Gemini API error: {e}")
+                    st.error(f"{_('Gemini API error:')} {e}")
     st.markdown('</div>', unsafe_allow_html=True)
 
-elif current_nav == "Reports":
+elif current_nav == _("Reports"):
     st.session_state.nav_view = "Overview"
     st.rerun()
 
-elif current_nav == "Alerts":
-    st.markdown(f'<div class="card"><h3 class="card-title">Active Alerts &amp; Warnings — {district}</h3>')
+elif current_nav == _("Alerts"):
+    st.markdown(f'<div class="card"><h3 class="card-title">{_("Active Alerts &amp; Warnings —")} {district}</h3>')
     # Generate alerts from current hazard severity values
     _alert_list = []
     if not hazards.empty:
         for hname, hcol, hlabel, hicon, hbg in [
-            ("flood", "flood_severity", "Flood Risk", "💧", "#dbeafe"),
-            ("drought", "drought_severity", "Drought", "🏜️", "#fef3c7"),
-            ("heatwave", "heatwave_severity", "Heatwave", "🔥", "#fee2e2"),
-            ("agri_stress", "agri_severity", "Agri Stress", "🌾", "#dcfce7"),
+            ("flood", "flood_severity", _("Flood Risk"), "💧", "#dbeafe"),
+            ("drought", "drought_severity", _("Drought"), "🏜️", "#fef3c7"),
+            ("heatwave", "heatwave_severity", _("Heatwave"), "🔥", "#fee2e2"),
+            ("agri_stress", "agri_severity", _("Agri Stress"), "🌾", "#dcfce7"),
         ]:
             if hcol in hazards.columns:
                 v = float(hazards[hcol].dropna().iloc[-1]) if hazards[hcol].notna().any() else 0
                 if v >= 50:
-                    level = "Warning" if v >= 75 else "Watch"
-                    _alert_list.append((hicon, hbg, f"{hlabel} Alert ({level})",
-                        f"{district} | Severity: {v:.0f}/100 | {_risk_word(v)}"))
+                    level = _("Warning") if v >= 75 else _("Watch")
+                    _alert_list.append((hicon, hbg, f"{hlabel} {_('Alert')} ({level})",
+                        f"{district} | {_('Severity')}: {v:.0f}/100 | {_risk_word(v)}"))
     if _alert_list:
         for icon, bg, title, desc in _alert_list:
             st.markdown(f"""
@@ -872,11 +888,11 @@ elif current_nav == "Alerts":
             <div style="font-size:11px;color:#64748b;">{desc}</div></div></div>
             """, unsafe_allow_html=True)
     else:
-        st.markdown("""
+        st.markdown(f"""
         <div style="display:flex;align-items:center;gap:12px;padding:16px 0;">
           <div style="width:36px;height:36px;border-radius:50%;background:#dcfce7;display:flex;align-items:center;justify-content:center;font-size:18px;">✅</div>
-          <div><div style="font-size:14px;font-weight:600;color:#16a34a;">No Active Alerts</div>
-          <div style="font-size:12px;color:#64748b;">All hazard levels are within normal range for {district}.</div></div>
+          <div><div style="font-size:14px;font-weight:600;color:#16a34a;">{_("No Active Alerts")}</div>
+          <div style="font-size:12px;color:#64748b;">{_("All hazard levels are within normal range for")} {district}.</div></div>
         </div>
         """, unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
@@ -888,14 +904,14 @@ else:
     r1 = st.columns([7, 3, 2])
 
     with r1[0]:
-        st.markdown('<div class="card"><h3 class="card-title">Madhya Pradesh — District Hazard Map</h3>', unsafe_allow_html=True)
+        st.markdown(f'<div class="card"><h3 class="card-title">{_("Madhya Pradesh — District Hazard Map")}</h3>', unsafe_allow_html=True)
 
         if bounds_mgr:
             gdf = bounds_mgr.gdf.copy()
             dlist = gdf[CFG.district_col].tolist() if CFG.district_col in gdf.columns else []
 
             # Hazard type selector
-            hazt = st.radio("", ["Flood", "Drought", "Heatwave", "Agri Stress"],
+            hazt = st.radio("", [_("Flood"), _("Drought"), _("Heatwave"), _("Agri Stress")],
                             horizontal=True, label_visibility="collapsed",
                             key="overview_hazard_type")
 
@@ -979,73 +995,93 @@ else:
             fig.update_yaxes(scaleanchor="x")
             st.plotly_chart(fig, use_container_width=True, key="main_map_v4")
         else:
-            st.info("No boundary data — install a shapefile or check config.")
+            st.info(_("No boundary data — install a shapefile or check config."))
 
     # Legend inline
-    st.markdown("""
+    st.markdown(f"""
     <div style="display:flex;gap:16px;font-size:11px;color:#475569;margin-top:4px;flex-wrap:wrap;">
-      <span><span class="swatch" style="background:#dc2626"></span> Very High</span>
-      <span><span class="swatch" style="background:#f97316"></span> High</span>
-      <span><span class="swatch" style="background:#eab308"></span> Moderate</span>
-      <span><span class="swatch" style="background:#22c55e"></span> Low</span>
-      <span><span class="swatch" style="background:#15803d"></span> Very Low</span>
+      <span><span class="swatch" style="background:#dc2626"></span> {_('Very High')}</span>
+      <span><span class="swatch" style="background:#f97316"></span> {_('High')}</span>
+      <span><span class="swatch" style="background:#eab308"></span> {_('Moderate')}</span>
+      <span><span class="swatch" style="background:#22c55e"></span> {_('Low')}</span>
+      <span><span class="swatch" style="background:#15803d"></span> {_('Very Low')}</span>
     </div>
     """, unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
     with r1[1]:
-        st.markdown('<div class="card"><h3 class="card-title">Live Alerts &amp; Warnings</h3>', unsafe_allow_html=True)
-        st.markdown("""
+        st.markdown(f'<div class="card"><h3 class="card-title">{_("Live Alerts &amp; Warnings")}</h3>', unsafe_allow_html=True)
+        st.markdown(f"""
         <div class="alert-row"><div class="alert-icon" style="background:#fee2e2;"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2"><path d="M12 9v4"/><path d="M12 17v.01"/><path d="M4.2 4.2L19.8 19.8"/><path d="M12 2a10 10 0 0 1 10 10"/><path d="M2 12a10 10 0 0 1 10-10"/></svg></div>
-        <div class="flex-1"><div style="font-size:13px;font-weight:600;">Heatwave Alert</div><div style="font-size:11.5px;color:#64748b;margin-top:2px;">Western MP | 29 May – 2 Jun</div></div></div>
+        <div class="flex-1"><div style="font-size:13px;font-weight:600;">{_("Heatwave")} {_("Alert")}</div><div style="font-size:11.5px;color:#64748b;margin-top:2px;">{_("Western MP")} | {(datetime.now() + timedelta(days=1)).strftime('%d %b')} – {(datetime.now() + timedelta(days=4)).strftime('%d %b')}</div></div></div>
         <div class="alert-row"><div class="alert-icon" style="background:#fef3c7;"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="2"><path d="M6 16.3A7 7 0 0 1 12 4a7 7 0 0 1 6 3.3"/><path d="M20 16.3A7 7 0 0 0 17 7"/><path d="M12 12v8"/><path d="M8 20h8"/></svg></div>
-        <div class="flex-1"><div style="font-size:13px;font-weight:600;">Thunderstorm Warning</div><div style="font-size:11.5px;color:#64748b;margin-top:2px;">Bhopal, Raisen, Sehore | 29 May</div></div></div>
+        <div class="flex-1"><div style="font-size:13px;font-weight:600;">{_("Thunderstorm Warning")}</div><div style="font-size:11.5px;color:#64748b;margin-top:2px;">Bhopal, Raisen, Sehore | {(datetime.now() + timedelta(days=1)).strftime('%d %b')}</div></div></div>
         <div class="alert-row"><div class="alert-icon" style="background:#dbeafe;"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2"><path d="M4 14.9A7 7 0 1 1 15.9 8h1.2a4.5 4.5 0 0 1 0 9H4"/><path d="M8 19l-2-2 2-2"/><path d="M16 19l2-2-2-2"/></svg></div>
-        <div class="flex-1"><div style="font-size:13px;font-weight:600;">Rainfall Deficit Detected</div><div style="font-size:11.5px;color:#64748b;margin-top:2px;">Several districts | Next 7 days</div></div></div>
+        <div class="flex-1"><div style="font-size:13px;font-weight:600;">{_("Rainfall Deficit Detected")}</div><div style="font-size:11.5px;color:#64748b;margin-top:2px;">{_("Several districts")} | {_("Next 7 days")}</div></div></div>
         """, unsafe_allow_html=True)
-        st.markdown('<a class="link" href="#">View All Alerts <span style="font-size:14px;">→</span></a>', unsafe_allow_html=True)
+        st.markdown(f'<a class="link" href="#">{_("View All Alerts")} <span style="font-size:14px;">→</span></a>', unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
     with r1[2]:
         # Forecast Confidence
         st.markdown(f"""
         <div class="card" style="margin-bottom:16px;">
-          <h3 class="card-title">Forecast Confidence</h3>
+          <h3 class="card-title">{_("Forecast Confidence")}</h3>
           <div style="margin-top:4px;display:flex;align-items:center;gap:12px;">
             <div style="position:relative;width:90px;height:90px;">
               <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;color:#0f172a;">85%</div>
             </div>
             <div>
-              <div style="font-size:14px;font-weight:700;color:#0f172a;">High Confidence</div>
-              <div style="font-size:11px;color:#64748b;margin-top:2px;">Model Agreement: High</div>
-              <div style="font-size:10px;color:#94a3b8;">Updated: {now.strftime('%d %b %H:%M')}</div>
+              <div style="font-size:14px;font-weight:700;color:#0f172a;">{_("High Confidence")}</div>
+              <div style="font-size:11px;color:#64748b;margin-top:2px;">{_("Model Agreement: High")}</div>
+              <div style="font-size:10px;color:#94a3b8;">{_("Updated")}: {now.strftime('%d %b %H:%M')}</div>
             </div>
           </div>
         </div>
         """, unsafe_allow_html=True)
-        st.markdown("""
+        st.markdown(f"""
         <div class="card">
-          <h3 class="card-title">AI Summary</h3>
+          <h3 class="card-title">{_("AI Summary")}</h3>
           <ul class="bullet-list" style="margin:0;padding:0;list-style:none;">
-            <li>Heatwave conditions likely to persist in western MP.</li>
-            <li>Rainfall deficit observed in 60% of districts.</li>
-            <li>Agri stress moderate to high in soybean regions.</li>
+            <li>{_("Heatwave conditions likely to persist in western MP.")}</li>
+            <li>{_("Rainfall deficit observed in 60% of districts.")}</li>
+            <li>{_("Agri stress moderate to high in soybean regions.")}</li>
           </ul>
-          <a class="link" href="#" style="margin-top:8px;display:inline-flex;">View Full Report →</a>
+          <a class="link" href="#" style="margin-top:8px;display:inline-flex;">{_("View Full Report")} →</a>
         </div>
         """, unsafe_allow_html=True)
 
-    # ── ROW 2: KPI STRIP ──
-    _sd = _sim_data(district)
-    st.markdown('<div class="section-eyebrow">Current Conditions</div>', unsafe_allow_html=True)
+    # ── ROW 2: KPI STRIP (using real data where available) ──
+    def _latest_val(col, default="--", fmt=".1f"):
+        if not data.empty and col in data.columns and data[col].notna().any():
+            v = data[col].dropna().iloc[-1]
+            return f"{v:{fmt}}"
+        return default
+
+    def _delta_str(col, sign="+"):
+        if not data.empty and col in data.columns:
+            s = data[col].dropna()
+            if len(s) > 30:
+                recent = s.iloc[-7:].mean()
+                past = s.iloc[-30:-7].mean()
+                diff = recent - past
+                return f"{sign if diff >= 0 else ''}{diff:.1f}" if col != "ndvi" else f"{sign if diff >= 0 else ''}{diff:.2f}"
+        return "--"
+
+    _tmax_v = _latest_val("tmax", "--", ".1f")
+    _precip_v = _latest_val("precip", "--", ".1f")
+    _sm_v = _latest_val("soil_moisture", "--", ".0f")
+    _ndvi_v = _latest_val("ndvi", "--", ".2f")
+
+    st.markdown(f'<div class="section-eyebrow">{_("Current Conditions")}</div>', unsafe_allow_html=True)
     kpi_cols = st.columns(6)
     kpis = [
-        ("🌡️", "Max Temperature", f'{_sd["tmax"]} °C', '+1.3 °C', "#fef2f2", "#ef4444"),
-        ("🌧️", "Rainfall (24h)", f'{_sd["precip"]} mm', '+3.1 mm', "#eff6ff", "#3b82f6"),
-        ("💧", "Humidity", '62%', '+5%', "#ecfeff", "#06b6d4"),
-        ("💨", "Wind Speed", '12 km/h', 'NNE', "#f1f5f9", "#64748b"),
-        ("🌱", "Soil Moisture", '28%', '-6%', "#f0fdf4", "#16a34a"),
-        ("🍃", "NDVI (Avg)", '0.42', '+0.03', "#f0fdf4", "#16a34a"),
+        ("🌡️", _("Max Temperature"), f'{_tmax_v} °C', _delta_str("tmax"), "#fef2f2", "#ef4444"),
+        ("🌧️", _("Rainfall (24h)"), f'{_precip_v} mm', _delta_str("precip"), "#eff6ff", "#3b82f6"),
+        ("💧", _("Humidity"), '62%', '+5%', "#ecfeff", "#06b6d4"),
+        ("💨", _("Wind Speed"), '12 km/h', 'NNE', "#f1f5f9", "#64748b"),
+        ("🌱", _("Soil Moisture"), f'{_sm_v}%', _delta_str("soil_moisture"), "#f0fdf4", "#16a34a"),
+        ("🍃", _("NDVI (Avg)"), _ndvi_v, _delta_str("ndvi", ""), "#f0fdf4", "#16a34a"),
     ]
     for i, (icon, label, val, delta, bg, clr) in enumerate(kpis):
         with kpi_cols[i]:
@@ -1060,25 +1096,40 @@ else:
             </div>
             """, unsafe_allow_html=True)
 
-    # ── ROW 3: ANOMALY CHARTS ──
-    st.markdown('<div class="section-eyebrow" style="margin-top:20px;">Climate Indicators</div>', unsafe_allow_html=True)
+    # ── ROW 3: ANOMALY CHARTS (using real data where available) ──
+    st.markdown(f'<div class="section-eyebrow" style="margin-top:20px;">{_("Climate Indicators")}</div>', unsafe_allow_html=True)
     chart_cols = st.columns(4)
 
-    rng42 = np.random.default_rng(42); rng43 = np.random.default_rng(43)
-    rng44 = np.random.default_rng(44); rng45 = np.random.default_rng(45)
-    rainfall_anom = rng42.uniform(-10, 15, 20).cumsum() + 38
-    temp_anom = rng43.uniform(-0.5, 0.8, 20).cumsum() + 0.5
-    ndvi_vals = np.clip(rng44.uniform(-0.02, 0.03, 20).cumsum() + 0.42, 0.2, 0.6)
-    dsi_vals = np.clip(rng45.uniform(-0.02, 0.04, 20).cumsum() + 0.3, 0.1, 0.6)
+    # Use real data for anomaly sparklines
+    def _series_for(col, agg="mean", periods=20):
+        if not data.empty and col in data.columns and data[col].notna().any():
+            s = data[col].dropna()
+            if len(s) > periods:
+                s = s.iloc[-periods*30:]
+            return s.resample("ME").agg(agg).iloc[-periods:].values
+        return np.zeros(periods)
+
+    _ra = _series_for("precip", "sum")
+    _ta = _series_for("tmax")
+    _nv = _series_for("ndvi")
+    _dsi = _series_for("soil_moisture")
+
+    def _big_val(series, unit=""):
+        if len(series) > 0:
+            v = series[-1]
+            if unit == "%":
+                return f"{v:+.0f}{unit}"
+            return f"{v:.1f} {unit}"
+        return "--"
 
     anomaly_configs = [
-        ("Rainfall Anomaly", "+38%", "#3b82f6", "bar", rainfall_anom, "%"),
-        ("Temperature Anomaly", "+1.6 °C", "#f97316", "bar", temp_anom, "°C"),
-        ("NDVI Trend", "0.42", "#16a34a", "line", ndvi_vals, ""),
-        ("Drought Severity Index", "0.35", "#8b5cf6", "line", dsi_vals, ""),
+        (_("Rainfall Anomaly"), _big_val(_ra, "%"), "#3b82f6", "bar", _ra),
+        (_("Temperature Anomaly"), _big_val(_ta, "°C"), "#f97316", "bar", _ta),
+        (_("NDVI Trend"), _big_val(_nv, ""), "#16a34a", "line", _nv),
+        (_("Drought Severity Index"), _big_val(_dsi, ""), "#8b5cf6", "line", _dsi),
     ]
 
-    for i, (title, big_val, color, chart_type, series, unit) in enumerate(anomaly_configs):
+    for i, (title, big_val, color, chart_type, series) in enumerate(anomaly_configs):
         with chart_cols[i]:
             st.markdown(f'<div class="card" style="padding:14px;">', unsafe_allow_html=True)
             st.markdown(f'<div class="card-title">{title}</div>', unsafe_allow_html=True)
@@ -1100,7 +1151,7 @@ else:
     r4 = st.columns([7, 2, 3])
 
     with r4[0]:
-        st.markdown('<div class="card"><h3 class="card-title">District Quick Status</h3>', unsafe_allow_html=True)
+        st.markdown(f'<div class="card"><h3 class="card-title">{_("District Quick Status")}</h3>', unsafe_allow_html=True)
         table_dists = ["Bhopal","Raisen","Sehore","Vidisha","Hoshangabad"]
         html_rows = ""
         for d in table_dists:
@@ -1118,8 +1169,8 @@ else:
         <div style="overflow-x:auto;">
           <table class="data-table" style="width:100%;">
             <thead><tr>
-              <th>District</th><th>Flood Risk</th><th>Heatwave Risk</th><th>Drought Risk</th>
-              <th>Agri Risk</th><th>Rainfall (mm)</th><th>Max Temp (°C)</th>
+              <th>{_('District')}</th><th>{_('Flood Risk')}</th><th>{_('Heatwave Risk')}</th><th>{_('Drought Risk')}</th>
+              <th>{_('Agri Risk')}</th><th>{_('Rainfall (mm)')}</th><th>{_('Max Temp (°C)')}</th>
             </tr></thead>
             <tbody>{html_rows}</tbody>
           </table>
@@ -1128,36 +1179,36 @@ else:
         st.markdown('</div>', unsafe_allow_html=True)
 
     with r4[1]:
-        st.markdown("""
+        st.markdown(f"""
         <div class="card" style="height:100%;">
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0f172a" stroke-width="2"><path d="M3 21h18"/><path d="M5 21V7l8-4v18"/><path d="M19 21V11l-6-4"/></svg>
-            <h3 class="card-title" style="margin:0;">Govt Advisory</h3>
+            <h3 class="card-title" style="margin:0;">{_("Govt Advisory")}</h3>
           </div>
           <ul class="bullet-list" style="margin:0;padding:0;list-style:none;">
-            <li>Monitor heatwave in western districts.</li>
-            <li>Ensure sufficient water availability.</li>
-            <li>Prepare for thunderstorm events.</li>
-            <li>Follow disaster management protocols.</li>
+            <li>{_("Monitor heatwave in western districts.")}</li>
+            <li>{_("Ensure sufficient water availability.")}</li>
+            <li>{_("Prepare for thunderstorm events.")}</li>
+            <li>{_("Follow disaster management protocols.")}</li>
           </ul>
-          <a class="link" href="#" style="margin-top:8px;display:inline-flex;">View Guidelines →</a>
+          <a class="link" href="#" style="margin-top:8px;display:inline-flex;">{_("View Guidelines")} →</a>
         </div>
         """, unsafe_allow_html=True)
 
     with r4[2]:
-        st.markdown("""
+        st.markdown(f"""
         <div class="card" style="height:100%;">
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#166534" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-            <h3 class="card-title" style="margin:0;">Farmer Advisory</h3>
+            <h3 class="card-title" style="margin:0;">{_("Farmer Advisory")}</h3>
           </div>
           <ul class="bullet-list" style="margin:0;padding:0;list-style:none;">
-            <li>Irrigate in morning hours.</li>
-            <li>Delay sowing of soybean.</li>
-            <li>Use mulching to retain soil moisture.</li>
-            <li>Monitor weather updates regularly.</li>
+            <li>{_("Irrigate in morning hours.")}</li>
+            <li>{_("Delay sowing of soybean.")}</li>
+            <li>{_("Use mulching to retain soil moisture.")}</li>
+            <li>{_("Monitor weather updates regularly.")}</li>
           </ul>
-          <a class="link" href="#" style="margin-top:8px;display:inline-flex;">View Recommendations →</a>
+          <a class="link" href="#" style="margin-top:8px;display:inline-flex;">{_("View Recommendations")} →</a>
         </div>
         """, unsafe_allow_html=True)
 
@@ -1169,28 +1220,44 @@ else:
         <div class="card" style="height:100%;">
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-            <h3 class="card-title" style="margin:0;">Upcoming Extreme Events</h3>
+            <h3 class="card-title" style="margin:0;">{_("Upcoming Extreme Events")}</h3>
           </div>
           <div style="display:flex;align-items:flex-start;gap:12px;">
             <div>
               <div style="font-size:40px;font-weight:700;line-height:1;color:#0f172a;">3</div>
-              <div style="font-size:12px;font-weight:600;margin-top:4px;">Potential Events</div>
-              <div style="font-size:11px;color:#94a3b8;">Next 7 Days</div>
+              <div style="font-size:12px;font-weight:600;margin-top:4px;">{_("Potential Events")}</div>
+              <div style="font-size:11px;color:#94a3b8;">{_("Next 7 Days")}</div>
             </div>
             <div style="font-size:12px;display:flex;flex-direction:column;gap:4px;">
-              <div><span class="mono" style="color:#94a3b8;">1</span> Heatwave</div>
-              <div><span class="mono" style="color:#94a3b8;">1</span> Thunderstorm</div>
-              <div><span class="mono" style="color:#94a3b8;">1</span> Heavy Rainfall</div>
+              <div><span class="mono" style="color:#94a3b8;">1</span> {_("Heatwave")}</div>
+              <div><span class="mono" style="color:#94a3b8;">1</span> {_("Thunderstorm")}</div>
+              <div><span class="mono" style="color:#94a3b8;">1</span> {_("Heavy Rainfall")}</div>
             </div>
           </div>
         </div>
         """, unsafe_allow_html=True)
 
     with r5[1]:
-        forecast_days = ["Today","30 May","31 May","1 Jun","2 Jun","3 Jun","4 Jun"]
-        forecast_icons = ["☀️","☀️","🌦️","🌦️","🌦️","⛅","☀️"]
-        forecast_highs = [41, 40, 38, 36, 35, 34, 35]
-        forecast_lows = [28, 27, 26, 24, 23, 22, 23]
+        # Dynamic 7-day forecast based on actual data
+        _today = datetime.now()
+        forecast_days = [_("Today")]
+        forecast_icons = ["☀️"]
+        forecast_highs = [41]
+        forecast_lows = [28]
+        for i in range(1, 7):
+            d = _today + timedelta(days=i)
+            forecast_days.append(d.strftime('%d %b'))
+        # Use real data for forecast temps if available
+        if not data.empty and "tmax" in data.columns and data["tmax"].notna().any():
+            _last_tmax = data["tmax"].dropna().iloc[-1]
+            _last_tmin = data["tmin"].dropna().iloc[-1] if "tmin" in data.columns and data["tmin"].notna().any() else _last_tmax - 10
+            # Simple trend: gradually return to mean over 7 days
+            _mean_tmax = float(data["tmax"].mean())
+            _mean_tmin = float(data["tmin"].mean()) if "tmin" in data.columns and data["tmin"].notna().any() else _mean_tmax - 10
+            for i in range(7):
+                _frac = i / 7
+                forecast_highs[i] = round(_last_tmax + (_mean_tmax - _last_tmax) * _frac, 0)
+                forecast_lows[i] = round(_last_tmin + (_mean_tmin - _last_tmin) * _frac, 0)
         fc_cells = ""
         for i in range(7):
             fc_cells += f"""
@@ -1203,32 +1270,32 @@ else:
         <div class="card" style="height:100%;">
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2"><path d="M19 4H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/></svg>
-            <h3 class="card-title" style="margin:0;">15-Day Forecast Overview</h3>
+            <h3 class="card-title" style="margin:0;">{_("15-Day Forecast Overview")}</h3>
           </div>
           <div style="display:grid;grid-template-columns: repeat(7, 1fr); gap:8px;">{fc_cells}</div>
-          <a class="link" href="#" style="margin-top:12px;display:inline-flex;">View Full Forecast →</a>
+          <a class="link" href="#" style="margin-top:12px;display:inline-flex;">{_("View Full Forecast")} →</a>
         </div>
         """, unsafe_allow_html=True)
 
     # ── METHODOLOGY ──
-    st.markdown("""
+    st.markdown(f"""
     <details style="margin-top:24px;">
       <summary style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:14px 16px;background:#ffffff;border:1px solid #e2e8f0;border-radius:14px;font-weight:600;font-size:14px;color:#0f172a;list-style:none;">
         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>
-        How We Calculate Hazards (IMD Standards)
-        <span style="margin-left:auto;font-size:11px;color:#94a3b8;">▼ click to expand</span>
+        {_("How We Calculate Hazards (IMD Standards)")}
+        <span style="margin-left:auto;font-size:11px;color:#94a3b8;">▼ {_("click to expand")}</span>
       </summary>
       <div style="padding:16px 16px;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 14px 14px;display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px;font-size:12px;color:#475569;">
-        <div><strong style="color:#0f172a;">🌊 Flood</strong><br>Rainfall persistence (≥64.5mm/day for 2+ days) + 3-day cumulative totals. Pre-monsoon months zeroed. Based on IMD heavy/very heavy/extreme rainfall thresholds.</div>
-        <div><strong style="color:#0f172a;">🌡️ Heatwave</strong><br>Max temp ≥40°C with departure ≥4.5°C from normal. Severe when departure ≥6.5°C. Follows IMD heatwave classification criteria.</div>
-        <div><strong style="color:#0f172a;">🏜️ Drought</strong><br>SPI-3 (Standardized Precipitation Index) ≤ -1.0 indicates moderate drought. Consecutive dry days (>30 days) also flagged. Based on IMD drought monitoring.</div>
-        <div><strong style="color:#0f172a;">🌱 Agri Stress</strong><br>Vegetation Health Index (VHI) < 50 derived from NDVI &amp; LST. Combined with soil moisture anomalies for crop stress assessment.</div>
+        <div><strong style="color:#0f172a;">{_("🌊 Flood")}</strong><br>{_("Rainfall persistence (≥64.5mm/day for 2+ days) + 3-day cumulative totals. Pre-monsoon months zeroed. Based on IMD heavy/very heavy/extreme rainfall thresholds.")}</div>
+        <div><strong style="color:#0f172a;">{_("🌡️ Heatwave")}</strong><br>{_("Max temp ≥40°C with departure ≥4.5°C from normal. Severe when departure ≥6.5°C. Follows IMD heatwave classification criteria.")}</div>
+        <div><strong style="color:#0f172a;">{_("🏜️ Drought")}</strong><br>{_("SPI-3 (Standardized Precipitation Index) ≤ -1.0 indicates moderate drought. Consecutive dry days (>30 days) also flagged. Based on IMD drought monitoring.")}</div>
+        <div><strong style="color:#0f172a;">{_("🌱 Agri Stress")}</strong><br>{_("Vegetation Health Index (VHI) < 50 derived from NDVI &amp; LST. Combined with soil moisture anomalies for crop stress assessment.")}</div>
       </div>
     </details>
     <style>
-    details[open] summary { border-radius: 14px 14px 0 0; border-bottom-color:#e2e8f0; }
-    details:not([open]) summary { border-radius: 14px; }
-    details summary::-webkit-details-marker { display: none; }
+    details[open] summary {{ border-radius: 14px 14px 0 0; border-bottom-color:#e2e8f0; }}
+    details:not([open]) summary {{ border-radius: 14px; }}
+    details summary::-webkit-details-marker {{ display: none; }}
     </style>
     """, unsafe_allow_html=True)
 
@@ -1237,7 +1304,7 @@ else:
     <div style="margin-top:24px;padding:20px 24px;background:linear-gradient(135deg,#f8fafc,#f1f5f9);border:1px solid var(--line);border-radius:20px;">
       <div style="display:flex;flex-wrap:wrap;gap:16px;">
         <div style="flex:2;min-width:180px;">
-          <h4 style="font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin:0 0 6px;">Data Sources</h4>
+          <h4 style="font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin:0 0 6px;">{_("Data Sources")}</h4>
           <div style="display:flex;flex-wrap:wrap;gap:4px;">
             <span class="tag">DICRA</span><span class="tag">ERA5-Land</span><span class="tag">IMD Gridded</span>
             <span class="tag" style="background:rgba(34,197,94,0.12);color:#15803d;">CMIP6 8-GCM</span>
@@ -1246,16 +1313,16 @@ else:
             <span class="tag" style="background:rgba(249,115,22,0.12);color:#c2410c;">MGNREGA</span>
           </div>
         </div>
-        <div><h4 style="font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin:0 0 6px;">Models</h4><div style="font-size:11px;color:#0f172a;">RF / XGBoost / LightGBM<br>Blend / CMIP6 Ensemble</div></div>
-        <div><h4 style="font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin:0 0 6px;">Validation</h4><div style="font-size:11px;color:#0f172a;">POD / FAR / HSS / BSS / ROC-AUC<br>Historical: 2000-2025</div></div>
-        <div><h4 style="font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin:0 0 6px;">Support</h4><div style="font-size:11px;color:#0f172a;">Water Climate &amp; Sustainability Lab<br><strong>IIT Indore</strong></div></div>
+        <div><h4 style="font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin:0 0 6px;">{_("Models")}</h4><div style="font-size:11px;color:#0f172a;">RF / XGBoost / LightGBM<br>Blend / CMIP6 Ensemble</div></div>
+        <div><h4 style="font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin:0 0 6px;">{_("Validation")}</h4><div style="font-size:11px;color:#0f172a;">POD / FAR / HSS / BSS / ROC-AUC<br>Historical: 2000-2025</div></div>
+        <div><h4 style="font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin:0 0 6px;">{_("Support")}</h4><div style="font-size:11px;color:#0f172a;">{_("Water Climate &amp; Sustainability Lab")}<br><strong>IIT Indore</strong></div></div>
       </div>
       <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--line);font-size:10px;color:#94a3b8;">
-        <strong>Disclaimer:</strong> This platform utilizes datasets from the DICRA dataset along with resources and research support from the Water Climate &amp; Sustainability Lab, IIT Indore. This platform and its predictive models are currently under validation and development. / Generated {now.strftime("%Y-%m-%d %H:%M")}
+        <strong>{_("Disclaimer")}:</strong> {_("This platform utilizes datasets from the DICRA dataset along with resources and research support from the Water Climate &amp; Sustainability Lab, IIT Indore. This platform and its predictive models are currently under validation and development.")} / {_("Generated")} {now.strftime("%Y-%m-%d %H:%M")}
       </div>
     </div>
     <div style="margin-top:16px;padding-bottom:8px;font-size:11px;color:#94a3b8;text-align:center;">
-      HydroVerse AI · Powered by ERA5 · IMD · CHIRPS · MODIS · CMIP6 · GEE
+      {_("HydroVerse AI · Powered by ERA5 · IMD · CHIRPS · MODIS · CMIP6 · GEE")}
     </div>
     """, unsafe_allow_html=True)
 
@@ -1305,7 +1372,7 @@ except Exception:
     pass
 if "_show_ai_popup" not in st.session_state:
     st.session_state._show_ai_popup = False
-if st.button("🤖 AI Assistant", key="ai_float_toggle", help="Toggle AI Assistant"):
+if st.button(_("🤖 AI Assistant"), key="ai_float_toggle", help=_("Toggle AI Assistant")):
     st.session_state._show_ai_popup = not st.session_state._show_ai_popup
     st.rerun()
 if st.session_state.get("_show_ai_popup"):
@@ -1319,14 +1386,14 @@ if st.session_state.get("_show_ai_popup"):
             st.markdown(text)
     st.markdown('</div>', unsafe_allow_html=True)
     st.markdown('<div class="ai-popup-footer">', unsafe_allow_html=True)
-    if prompt := st.chat_input("Ask about climate, hazards..."):
+    if prompt := st.chat_input(_("Ask about climate, hazards...")):
         st.session_state.chat_history.append(("user", prompt))
         st.session_state._show_ai_popup = True
         with st.chat_message("user"):
             st.markdown(prompt)
         with st.chat_message("assistant"):
             if _gmodel is None:
-                st.error("AI unavailable — set a valid GEMINI_API_KEY in Secrets.")
+                st.error(_("AI unavailable — set a valid GEMINI_API_KEY in Secrets."))
             else:
                 try:
                     resp = _gmodel.generate_content(
@@ -1336,6 +1403,6 @@ if st.session_state.get("_show_ai_popup"):
                     st.markdown(resp.text)
                     st.session_state.chat_history.append(("assistant", resp.text))
                 except Exception as e:
-                    st.error(f"Gemini error: {e}")
+                    st.error(f"{_('Gemini error:')} {e}")
     st.markdown('</div>', unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
