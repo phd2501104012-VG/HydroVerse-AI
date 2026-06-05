@@ -654,7 +654,10 @@ if current_nav == tr("Live Monitoring"):
                         plot_bgcolor="rgba(0,0,0,0)")
                     st.plotly_chart(fig2, use_container_width=True, key="lm_recent_precip")
             else:
-                st.info(tr("No recent observations available."))
+                # Show raw data availability info
+                _avail = [c for c in ["tmax","tmin","precip","ndvi","soil_moisture"] if c in data.columns and data[c].notna().any()]
+                _last_d = data.index.max().date() if not data.empty else "—"
+                st.info(f"Data: {', '.join(_avail)} · Rows: {len(data)} · Last: {_last_d}" if _avail else tr("No recent observations available."))
     else:
         st.info(tr("No data available for this district."))
     st.markdown('</div>', unsafe_allow_html=True)
